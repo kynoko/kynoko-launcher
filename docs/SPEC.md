@@ -99,6 +99,14 @@ Non-goals:
 - **The agent** runs while at least one session is open, then exits after an
   idle delay. It shows a tray / menu-bar icon while alive, so the user can see
   why it runs and close sessions.
+- **Window UI**: `@common/kynoko-ui` is a private package and this public
+  repository must build on GitHub Actions without private registry
+  credentials. So only the **Boréal design tokens** (CSS custom properties:
+  colours, spacing, radii, typography) are vendored here, and the few
+  components the window needs are written in this repository. Vendored
+  tokens become Apache-2.0 like the rest; the fonts keep their own licenses
+  (Inter: SIL OFL 1.1); brand assets (logo, app icons) are not vendored, they
+  come from the catalogue at run time and stay trademarks (TRADEMARKS.md).
 - **State** lives in the user's config directory: settings, catalogue cache,
   and an **inventory** of everything written to the system (section 11).
 
@@ -527,10 +535,7 @@ catalogue in the system's language, falling back to English.
 
 ## 16. Open questions
 
-1. **UI toolkit**: `@common/kynoko-ui` is a private package; a public repository
-   must build on GitHub Actions without private registry credentials. Options:
-   publish the needed parts of kynoko-ui, vendor its design tokens (CSS custom
-   properties) only, or build the window with a minimal toolkit.
+1. ~~UI toolkit~~ decided: see *Window UI* in section 3.
 2. **Safari**: does a public HTTPS page reach `http://127.0.0.1`, and with which
    prompt? Needs a Mac.
 3. **Edge / Chrome prompt**: wording and "remember" behaviour, headed test
@@ -564,3 +569,4 @@ catalogue in the system's language, falling back to English.
 | 2026-09-25 | Catalogue public, refreshed every 12 h + manual, failures shown only in the window. |
 | 2026-09-25 | Façade shortcuts in a submenu of their app. |
 | 2026-09-25 | ChromeOS kept (after v1); Android companion in phase 2; iOS limits documented honestly. |
+| 2026-09-25 | Window UI: vendor the Boréal design tokens only, no dependency on the private kynoko-ui package. |
