@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Lang, pickLang, t } from './i18n';
 
 interface Browser { id: string; name: string; engine: string }
@@ -9,6 +10,8 @@ interface State {
   defaultBrowser: string | null;
   catalogueDate: string;
   windows: boolean;
+  /** The app a `kynoko-launcher://settings?app=` link asked for. */
+  focus: string | null;
 }
 
 const lang: Lang = pickLang(navigator.languages);
@@ -74,7 +77,7 @@ async function render(): Promise<void> {
     const open = el('button', { type: 'button' }, t(lang, 'OPEN_APP'));
     open.addEventListener('click', () => void run(() => invoke('launch', { target: app.code })));
     appsCard.append(
-      el('div', { class: 'row' },
+      el('div', { class: app.code === state.focus ? 'row focus' : 'row', id: 'app-' + app.code },
         el('span', { class: 'name' }, app.name),
         el('span', { class: 'controls' },
           browserSelect(state, app.browser, t(lang, 'FOLLOW_DEFAULT'), t(lang, 'BROWSER_FOR', { app: app.name }),
@@ -111,6 +114,10 @@ async function render(): Promise<void> {
       remove,
     ),
   );
+  if (state.focus) document.getElementById('app-' + state.focus)?.scrollIntoView({ block: 'center' });
 }
+
+// The running window was asked for again (an app's menu entry): show that app.
+void listen('focus-app', () => void render());
 
 void render();
