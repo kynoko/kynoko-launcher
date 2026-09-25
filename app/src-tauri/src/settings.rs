@@ -16,6 +16,10 @@ pub struct Settings {
     pub default_browser: Option<String>,
     /// Per-app override of the browser.
     pub app_browsers: HashMap<String, String>,
+    /// Profile of the default browser (None = the browser's own default).
+    pub default_profile: Option<String>,
+    /// Profile of an app's own browser.
+    pub app_profiles: HashMap<String, String>,
     /// Apps whose file types are associated with Kynoko Launcher.
     pub associated_apps: Vec<String>,
     /// Apps that have shortcuts (a Start menu folder with their facades).
@@ -78,6 +82,15 @@ impl Settings {
     /// The browser for `app`: its own, else the default (None = system default).
     pub fn browser_for(&self, app: &str) -> Option<String> {
         self.app_browsers.get(app).cloned().or_else(|| self.default_browser.clone())
+    }
+
+    /// The profile for `app`, belonging to the browser `browser_for` gives.
+    pub fn profile_for(&self, app: &str) -> Option<String> {
+        if self.app_browsers.contains_key(app) {
+            self.app_profiles.get(app).cloned()
+        } else {
+            self.default_profile.clone()
+        }
     }
 }
 

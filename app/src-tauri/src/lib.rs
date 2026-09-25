@@ -120,7 +120,9 @@ fn open_files(shared: &Shared, files: &[PathBuf]) -> Result<(), String> {
         let base = app_url(&settings, app);
         let token = bridge.open(path.clone(), origin_of(&base));
         let url = format!("{}/open#kynokoBridge=127.0.0.1:{}/{}&{MARKER}", base.trim_end_matches('/'), bridge.port, token);
-        launch::open(&url, browser_by_id(settings.browser_for(&app.code)).as_ref()).map_err(|e| e.to_string())?;
+        let profile = settings.profile_for(&app.code);
+        launch::open(&url, browser_by_id(settings.browser_for(&app.code)).as_ref(), profile.as_deref())
+            .map_err(|e| e.to_string())?;
     }
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
     Ok(())
@@ -132,7 +134,8 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let app = shared.catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
     let settings = Settings::load();
     let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
-    launch::open(&url, browser_by_id(settings.browser_for(code)).as_ref()).map_err(|e| e.to_string())
+    let profile = settings.profile_for(code);
+    launch::open(&url, browser_by_id(settings.browser_for(code)).as_ref(), profile.as_deref()).map_err(|e| e.to_string())
 }
 
 fn cleanup() -> Result<(), String> {
@@ -196,6 +199,7 @@ struct AppView {
     associated: bool,
     shortcuts: bool,
     browser: Option<String>,
+    profile: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -204,6 +208,7 @@ struct StateView {
     apps: Vec<AppView>,
     browsers: Vec<browsers::Browser>,
     default_browser: Option<String>,
+    default_profile: Option<String>,
     catalogue_date: String,
     windows: bool,
     /// The app to put forward, once.
@@ -225,10 +230,12 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
                 associated: settings.associated_apps.contains(&a.code),
                 shortcuts: settings.shortcut_apps.contains(&a.code),
                 browser: settings.app_browsers.get(&a.code).cloned(),
+                profile: settings.app_profiles.get(&a.code).cloned(),
             })
             .collect(),
         browsers: browsers::installed(),
         default_browser: settings.default_browser.clone(),
+        default_profile: settings.default_profile.clone(),
         catalogue_date: shared.catalogue.generated_at.clone(),
         windows: cfg!(windows),
         focus: shared.focus.lock().expect("lock").take(),
@@ -238,16 +245,36 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
 #[tauri::command]
 fn set_default_browser(id: Option<String>) -> Result<(), String> {
     let mut settings = Settings::load();
+    // A profile belongs to one browser: another browser starts on its own default.
+    settings.default_profile = None;
     settings.default_browser = id;
+    settings.save().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_default_profile(id: Option<String>) -> Result<(), String> {
+    let mut settings = Settings::load();
+    settings.default_profile = id;
     settings.save().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn set_app_browser(code: String, id: Option<String>) -> Result<(), String> {
     let mut settings = Settings::load();
+    settings.app_profiles.remove(&code);
     match id {
         Some(id) => settings.app_browsers.insert(code, id),
         None => settings.app_browsers.remove(&code),
+    };
+    settings.save().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_app_profile(code: String, id: Option<String>) -> Result<(), String> {
+    let mut settings = Settings::load();
+    match id {
+        Some(id) => settings.app_profiles.insert(code, id),
+        None => settings.app_profiles.remove(&code),
     };
     settings.save().map_err(|e| e.to_string())
 }
@@ -300,7 +327,7 @@ fn open_default_apps() -> Result<(), String> {
     #[cfg(windows)]
     {
         let url = format!("ms-settings:defaultapps?registeredAppUser={}", assoc::APPLICATION_NAME.replace(' ', "%20"));
-        return launch::open(&url, None).map_err(|e| e.to_string());
+        return launch::open(&url, None, None).map_err(|e| e.to_string());
     }
     #[allow(unreachable_code)]
     Err("not available on this system".into())
@@ -326,7 +353,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_state,
             set_default_browser,
+            set_default_profile,
             set_app_browser,
+            set_app_profile,
             set_associated,
             set_shortcuts,
             launch,

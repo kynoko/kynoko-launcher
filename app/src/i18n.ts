@@ -5,7 +5,7 @@
 export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
-  | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
+  | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
   | 'APPS_TITLE' | 'OPEN_FILES' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE',
   string
@@ -15,6 +15,8 @@ const FR: Dict = {
   LEAD: "Vos fichiers s'ouvrent dans les apps Kynoko, dans le navigateur de votre choix, et s'enregistrent à leur place.",
   BROWSER_TITLE: 'Navigateur',
   DEFAULT_BROWSER: 'Navigateur par défaut',
+  USUAL_PROFILE: 'Profil habituel',
+  PROFILE_FOR: 'Profil de {{app}}',
   SYSTEM_DEFAULT: 'Celui du système',
   FOLLOW_DEFAULT: 'Navigateur par défaut',
   NO_BROWSERS: 'Aucun navigateur trouvé : celui du système sera utilisé.',
@@ -35,6 +37,8 @@ const EN: Dict = {
   LEAD: 'Your files open in the Kynoko apps, in the browser you choose, and save back in place.',
   BROWSER_TITLE: 'Browser',
   DEFAULT_BROWSER: 'Default browser',
+  USUAL_PROFILE: 'Usual profile',
+  PROFILE_FOR: 'Profile for {{app}}',
   SYSTEM_DEFAULT: "The system's",
   FOLLOW_DEFAULT: 'Default browser',
   NO_BROWSERS: "No browser found: the system's will be used.",
@@ -55,6 +59,8 @@ const ES: Dict = {
   LEAD: 'Tus archivos se abren en las apps de Kynoko, en el navegador que elijas, y se guardan en su sitio.',
   BROWSER_TITLE: 'Navegador',
   DEFAULT_BROWSER: 'Navegador predeterminado',
+  USUAL_PROFILE: 'Perfil habitual',
+  PROFILE_FOR: 'Perfil de {{app}}',
   SYSTEM_DEFAULT: 'El del sistema',
   FOLLOW_DEFAULT: 'Navegador predeterminado',
   NO_BROWSERS: 'No se ha encontrado ningún navegador: se usará el del sistema.',
@@ -75,6 +81,8 @@ const JA: Dict = {
   LEAD: 'ファイルは選んだブラウザーで Kynoko のアプリで開き、元の場所に保存されます。',
   BROWSER_TITLE: 'ブラウザー',
   DEFAULT_BROWSER: '既定のブラウザー',
+  USUAL_PROFILE: 'いつものプロファイル',
+  PROFILE_FOR: '{{app}} のプロファイル',
   SYSTEM_DEFAULT: 'システムの既定',
   FOLLOW_DEFAULT: '既定のブラウザー',
   NO_BROWSERS: 'ブラウザーが見つかりません。システムの既定を使います。',
@@ -95,6 +103,8 @@ const ZH_HANS: Dict = {
   LEAD: '您的文件会在您选择的浏览器中用 Kynoko 应用打开，并保存回原处。',
   BROWSER_TITLE: '浏览器',
   DEFAULT_BROWSER: '默认浏览器',
+  USUAL_PROFILE: '常用配置文件',
+  PROFILE_FOR: '{{app}} 的配置文件',
   SYSTEM_DEFAULT: '系统默认',
   FOLLOW_DEFAULT: '默认浏览器',
   NO_BROWSERS: '未找到浏览器：将使用系统默认浏览器。',
@@ -115,6 +125,8 @@ const ZH_HANT: Dict = {
   LEAD: '您的檔案會在您選擇的瀏覽器中以 Kynoko 應用程式開啟，並儲存回原處。',
   BROWSER_TITLE: '瀏覽器',
   DEFAULT_BROWSER: '預設瀏覽器',
+  USUAL_PROFILE: '常用設定檔',
+  PROFILE_FOR: '{{app}} 的設定檔',
   SYSTEM_DEFAULT: '系統預設',
   FOLLOW_DEFAULT: '預設瀏覽器',
   NO_BROWSERS: '找不到瀏覽器：將使用系統預設瀏覽器。',
@@ -135,6 +147,8 @@ const AR: Dict = {
   LEAD: 'تُفتح ملفاتك في تطبيقات Kynoko، في المتصفح الذي تختاره، وتُحفظ في مكانها.',
   BROWSER_TITLE: 'المتصفح',
   DEFAULT_BROWSER: 'المتصفح الافتراضي',
+  USUAL_PROFILE: 'الملف الشخصي المعتاد',
+  PROFILE_FOR: 'الملف الشخصي لـ {{app}}',
   SYSTEM_DEFAULT: 'متصفح النظام',
   FOLLOW_DEFAULT: 'المتصفح الافتراضي',
   NO_BROWSERS: 'لم يُعثر على أي متصفح: سيُستخدم متصفح النظام.',
