@@ -515,7 +515,9 @@ newer version exists. No system notification.
 ## 14. Mobile
 
 - **Android**: phase 2, an open source companion APK (self-generated signing
-  key, F-Droid or direct download). It registers in "Open with" for the Kynoko
+  key, F-Droid or direct download), **in this repository**: Tauri 2 builds
+  Android from the same Rust core (catalogue, bridge, guards), so the logic is
+  written once. It registers in "Open with" for the Kynoko
   types, keeps write access to the document (`takePersistableUriPermission`)
   and serves it through the **same bridge protocol**, so the apps need nothing
   more. To verify then: Chrome Android's Local Network Access behaviour and
@@ -570,3 +572,4 @@ catalogue in the system's language, falling back to English.
 | 2026-09-25 | Façade shortcuts in a submenu of their app. |
 | 2026-09-25 | ChromeOS kept (after v1); Android companion in phase 2; iOS limits documented honestly. |
 | 2026-09-25 | Window UI: vendor the Boréal design tokens only, no dependency on the private kynoko-ui package. |
+| 2026-09-25 | The Android companion lives in this repository (Tauri 2 mobile, shared Rust core). |
