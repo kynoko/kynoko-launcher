@@ -1,7 +1,7 @@
 # Spike: loopback bridge (phase 0)
 
 Can a web app, in ANY browser, read a local file handed over by Kynoko
-Applications and write it back in place, safely?
+Launcher and write it back in place, safely?
 
 - `src/main.rs`: the bridge. One process = one file, one origin, one token.
   Guards: 127.0.0.1 only, exact `Host`, exact `Origin`, 256-bit token,

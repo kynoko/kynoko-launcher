@@ -1,4 +1,4 @@
-//! Phase 0 spike: the loopback channel between Kynoko Applications and a web
+//! Phase 0 spike: the loopback channel between Kynoko Launcher and a web
 //! app running in ANY browser.
 //!
 //! One process serves ONE file to ONE origin, behind ONE token:

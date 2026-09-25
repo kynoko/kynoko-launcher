@@ -1,4 +1,4 @@
-# Kynoko Applications
+# Kynoko Launcher
 
 The desktop companion of the [Kynoko](https://kynoko.com) web apps, for
 Windows, macOS and Linux.
