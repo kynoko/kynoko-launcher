@@ -1,0 +1,98 @@
+# A tag vX.Y.Z builds the installers of the three desktop systems and
+# publishes them as a GitHub release, with SHA-256 checksums.
+#
+# Asset names are STABLE (no version in them), so that
+#   https://github.com/kynoko/kynoko-launcher/releases/latest/download/<name>
+# always points at the newest build: the Kynoko apps link there.
+#
+# Nothing is signed with a paid identity (docs/SPEC.md, section 12); macOS
+# gets the free ad hoc signature Apple Silicon requires.
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --bundles nsis
+          - os: macos-latest
+            args: --bundles dmg --target universal-apple-darwin
+          - os: ubuntu-22.04
+            args: --bundles deb,appimage,rpm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf rpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Version from the tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node -e "const f='app/src-tauri/tauri.conf.json';const fs=require('fs');const c=JSON.parse(fs.readFileSync(f));c.version=process.argv[1];fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')" "$version"
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      - name: Build
+        working-directory: app
+        run: npx tauri build ${{ matrix.args }}
+
+      - name: Stable names
+        shell: bash
+        run: |
+          mkdir -p out
+          t=app/src-tauri/target
+          case "${{ runner.os }}" in
+            Windows) cp $t/release/bundle/nsis/*-setup.exe out/kynoko-launcher-windows-x64-setup.exe ;;
+            macOS)   cp $t/universal-apple-darwin/release/bundle/dmg/*.dmg out/kynoko-launcher-macos-universal.dmg ;;
+            Linux)   cp $t/release/bundle/appimage/*.AppImage out/kynoko-launcher-linux-x86_64.AppImage
+                     cp $t/release/bundle/deb/*.deb out/kynoko-launcher-linux-amd64.deb
+                     cp $t/release/bundle/rpm/*.rpm out/kynoko-launcher-linux-x86_64.rpm ;;
+          esac
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ runner.os }}
+          path: out/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: out
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true

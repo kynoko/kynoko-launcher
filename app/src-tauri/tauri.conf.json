@@ -11,7 +11,13 @@
   },
   "app": {
     "windows": [
-      { "label": "main", "title": "Kynoko Launcher", "width": 780, "height": 760, "visible": false }
+      {
+        "label": "main",
+        "title": "Kynoko Launcher",
+        "width": 780,
+        "height": 760,
+        "visible": false
+      }
     ],
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
@@ -19,13 +25,24 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico", "icons/icon.icns"],
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
         "installerHooks": "windows/hooks.nsh"
       }
+    },
+    "macOS": {
+      "signingIdentity": "-"
     }
   }
 }
