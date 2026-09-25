@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge spike</title>
+</head>
+<body>
+<pre id="log"></pre>
+<script type="module">
+// Plays the web app's side of the loopback channel: read, write back, detect a
+// conflict, then report to the page's own origin (POST /results).
+const log = (m) => (document.getElementById('log').textContent += m + '\n');
+const params = new URLSearchParams(location.hash.slice(1));
+const bridge = params.get('kynokoBridge'); // 127.0.0.1:<port>/<token>
+const mode = params.get('mode') || 'full';
+const base = `http://${bridge.split('/')[0]}/s/${bridge.split('/')[1]}`;
+// A permission prompt nobody answers must not hang the run; a manual run
+// (a human reading the prompt) passes a longer `timeout` in the fragment.
+const timeoutMs = Number(params.get('timeout') || 15000);
+const fetch = (u, o = {}) => window.fetch(u, { ...o, signal: AbortSignal.timeout(timeoutMs) });
+const results = { ua: navigator.userAgent, origin: location.origin, mode, steps: {} };
+
+const hex = async (buf) =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+async function step(name, fn) {
+  const t0 = performance.now();
+  try {
+    results.steps[name] = { ok: true, value: await fn(), ms: Math.round(performance.now() - t0) };
+  } catch (e) {
+    results.steps[name] = { ok: false, error: String(e), ms: Math.round(performance.now() - t0) };
+  }
+  log(`${name}: ${JSON.stringify(results.steps[name])}`);
+}
+
+if (mode === 'foreign') {
+  // This page's origin is NOT the allowed one: every read must fail.
+  await step('foreignMeta', async () => (await fetch(`${base}/meta`)).status);
+  await step('foreignContent', async () => (await fetch(`${base}/content`)).status);
+} else {
+  let tag;
+  await step('meta', async () => {
+    const r = await fetch(`${base}/meta`);
+    const m = await r.json();
+    tag = m.etag;
+    return m;
+  });
+  await step('read', async () => {
+    const r = await fetch(`${base}/content`);
+    if (!r.ok) throw new Error(`status ${r.status}`);
+    const buf = await r.arrayBuffer();
+    return { bytes: buf.byteLength, sha256: await hex(buf), etag: r.headers.get('ETag') };
+  });
+  const edited = new TextEncoder().encode(`edited by ${navigator.userAgent} at ${Date.now()}\n`.repeat(1000));
+  await step('write', async () => {
+    const r = await fetch(`${base}/content`, { method: 'PUT', headers: { 'If-Match': tag }, body: edited });
+    if (!r.ok) throw new Error(`status ${r.status}`);
+    const old = tag;
+    tag = (await r.json()).etag;
+    return { newEtag: tag, changed: tag !== old, sha256: await hex(edited) };
+  });
+  await step('staleWriteRefused', async () => {
+    const r = await fetch(`${base}/content`, { method: 'PUT', headers: { 'If-Match': '"stale"' }, body: 'x' });
+    return r.status; // expected 412
+  });
+  await step('rereadMatchesWrite', async () => {
+    const buf = await (await fetch(`${base}/content`)).arrayBuffer();
+    return (await hex(buf)) === (await hex(edited));
+  });
+  await step('heartbeat', async () => (await fetch(`${base}/heartbeat`, { method: 'POST' })).status);
+  await step('close', async () => (await fetch(base, { method: 'DELETE' })).status);
+}
+
+await window.fetch('/results', { method: 'POST', body: JSON.stringify(results) });
+log('reported');
+</script>
+</body>
+</html>
