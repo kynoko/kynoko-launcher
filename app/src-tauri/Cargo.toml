@@ -22,10 +22,13 @@ serde_json = "1"
 tiny_http = "0.12"
 getrandom = "0.2"
 dirs = "5"
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_Shell"] }
+mslnk = "0.1"
 
 [profile.release]
 codegen-units = 1
