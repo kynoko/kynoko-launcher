@@ -1,0 +1,1185 @@
+{
+  "v": 1,
+  "generatedAt": "2026-09-25T18:05:47.845Z",
+  "apps": [
+    {
+      "code": "Office",
+      "url": "https://office.kynoko.com/",
+      "names": {
+        "en": "Kynoko Office",
+        "fr": "Kynoko Office"
+      },
+      "status": "live",
+      "facades": [
+        {
+          "path": "document",
+          "names": {
+            "ar": "مستند",
+            "en": "Document",
+            "es": "Documento",
+            "fr": "Document",
+            "ja": "ドキュメント",
+            "zh-Hans": "文档",
+            "zh-Hant": "文件"
+          },
+          "files": [
+            {
+              "ext": "docx",
+              "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            },
+            {
+              "ext": "doc",
+              "mime": "application/msword"
+            },
+            {
+              "ext": "odt",
+              "mime": "application/vnd.oasis.opendocument.text"
+            },
+            {
+              "ext": "fodt",
+              "mime": "application/vnd.oasis.opendocument.text-flat-xml"
+            },
+            {
+              "ext": "rtf",
+              "mime": "application/rtf"
+            },
+            {
+              "ext": "txt",
+              "mime": "text/plain"
+            },
+            {
+              "ext": "md",
+              "mime": "text/markdown"
+            },
+            {
+              "ext": "html",
+              "mime": "text/html"
+            },
+            {
+              "ext": "htm",
+              "mime": "text/html"
+            }
+          ]
+        },
+        {
+          "path": "spreadsheet",
+          "names": {
+            "ar": "جدول بيانات",
+            "en": "Spreadsheet",
+            "es": "Hoja de cálculo",
+            "fr": "Tableur",
+            "ja": "表計算",
+            "zh-Hans": "电子表格",
+            "zh-Hant": "試算表"
+          },
+          "files": [
+            {
+              "ext": "xlsx",
+              "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            },
+            {
+              "ext": "xls",
+              "mime": "application/vnd.ms-excel"
+            },
+            {
+              "ext": "ods",
+              "mime": "application/vnd.oasis.opendocument.spreadsheet"
+            },
+            {
+              "ext": "fods",
+              "mime": "application/vnd.oasis.opendocument.spreadsheet-flat-xml"
+            },
+            {
+              "ext": "csv",
+              "mime": "text/csv"
+            },
+            {
+              "ext": "tsv",
+              "mime": "text/tab-separated-values"
+            }
+          ]
+        },
+        {
+          "path": "slides",
+          "names": {
+            "ar": "عرض تقديمي",
+            "en": "Presentation",
+            "es": "Presentación",
+            "fr": "Présentation",
+            "ja": "プレゼンテーション",
+            "zh-Hans": "演示文稿",
+            "zh-Hant": "簡報"
+          },
+          "files": [
+            {
+              "ext": "pptx",
+              "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            },
+            {
+              "ext": "ppt",
+              "mime": "application/vnd.ms-powerpoint"
+            },
+            {
+              "ext": "odp",
+              "mime": "application/vnd.oasis.opendocument.presentation"
+            },
+            {
+              "ext": "fodp",
+              "mime": "application/vnd.oasis.opendocument.presentation-flat-xml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PhotoStudio",
+      "url": "https://photo-studio.kynoko.com/",
+      "names": {
+        "en": "Photo Studio",
+        "fr": "Photo Studio"
+      },
+      "status": "live",
+      "facades": [
+        {
+          "path": "studio/express",
+          "names": {
+            "ar": "تنقيح سريع",
+            "en": "Quick retouch",
+            "es": "Retoque rápido",
+            "fr": "Retouche express",
+            "ja": "クイックレタッチ",
+            "zh-Hans": "快速修图",
+            "zh-Hant": "快速修圖"
+          },
+          "files": [
+            {
+              "ext": "jpg",
+              "mime": "image/jpeg",
+              "primary": true
+            },
+            {
+              "ext": "jpeg",
+              "mime": "image/jpeg",
+              "primary": true
+            },
+            {
+              "ext": "png",
+              "mime": "image/png",
+              "primary": true
+            },
+            {
+              "ext": "webp",
+              "mime": "image/webp",
+              "primary": true
+            },
+            {
+              "ext": "tif",
+              "mime": "image/tiff",
+              "primary": true
+            },
+            {
+              "ext": "tiff",
+              "mime": "image/tiff",
+              "primary": true
+            }
+          ]
+        },
+        {
+          "path": "studio/resize",
+          "names": {
+            "ar": "تغيير الحجم",
+            "en": "Resize",
+            "es": "Cambiar tamaño",
+            "fr": "Redimensionner",
+            "ja": "サイズ変更",
+            "zh-Hans": "调整大小",
+            "zh-Hant": "調整尺寸"
+          },
+          "files": [
+            {
+              "ext": "jpg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "jpeg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "png",
+              "mime": "image/png"
+            },
+            {
+              "ext": "webp",
+              "mime": "image/webp"
+            },
+            {
+              "ext": "tif",
+              "mime": "image/tiff"
+            },
+            {
+              "ext": "tiff",
+              "mime": "image/tiff"
+            }
+          ]
+        },
+        {
+          "path": "studio/cutout",
+          "names": {
+            "ar": "إزالة الخلفية",
+            "en": "Cut out",
+            "es": "Quitar fondo",
+            "fr": "Détourer",
+            "ja": "切り抜き",
+            "zh-Hans": "抠图",
+            "zh-Hant": "去背"
+          },
+          "files": [
+            {
+              "ext": "jpg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "jpeg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "png",
+              "mime": "image/png"
+            },
+            {
+              "ext": "webp",
+              "mime": "image/webp"
+            },
+            {
+              "ext": "tif",
+              "mime": "image/tiff"
+            },
+            {
+              "ext": "tiff",
+              "mime": "image/tiff"
+            }
+          ]
+        },
+        {
+          "path": "studio/annotate",
+          "names": {
+            "ar": "تعليقات توضيحية",
+            "en": "Annotate",
+            "es": "Anotar",
+            "fr": "Annoter",
+            "ja": "注釈",
+            "zh-Hans": "标注",
+            "zh-Hant": "標註"
+          },
+          "files": [
+            {
+              "ext": "jpg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "jpeg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "png",
+              "mime": "image/png"
+            },
+            {
+              "ext": "webp",
+              "mime": "image/webp"
+            },
+            {
+              "ext": "tif",
+              "mime": "image/tiff"
+            },
+            {
+              "ext": "tiff",
+              "mime": "image/tiff"
+            },
+            {
+              "ext": "psd",
+              "mime": "image/vnd.adobe.photoshop"
+            }
+          ]
+        },
+        {
+          "path": "studio/edit",
+          "names": {
+            "ar": "ورشة الصور",
+            "en": "Photo workshop",
+            "es": "Taller de fotos",
+            "fr": "Atelier photo",
+            "ja": "フォトアトリエ",
+            "zh-Hans": "照片工坊",
+            "zh-Hant": "相片工作室"
+          },
+          "files": [
+            {
+              "ext": "jpg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "jpeg",
+              "mime": "image/jpeg"
+            },
+            {
+              "ext": "png",
+              "mime": "image/png"
+            },
+            {
+              "ext": "webp",
+              "mime": "image/webp"
+            },
+            {
+              "ext": "tif",
+              "mime": "image/tiff"
+            },
+            {
+              "ext": "tiff",
+              "mime": "image/tiff"
+            },
+            {
+              "ext": "psd",
+              "mime": "image/vnd.adobe.photoshop",
+              "primary": true
+            },
+            {
+              "ext": "kphoto",
+              "primary": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MediaStudio",
+      "url": "https://media-studio.kynoko.com/",
+      "names": {
+        "en": "Media Studio",
+        "fr": "Media Studio"
+      },
+      "status": "live",
+      "facades": [
+        {
+          "path": "studio/convert",
+          "names": {
+            "ar": "تحويل",
+            "en": "Convert",
+            "es": "Convertir",
+            "fr": "Convertir",
+            "ja": "変換",
+            "zh-Hans": "转换",
+            "zh-Hant": "轉換"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4",
+              "primary": true
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime",
+              "primary": true
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska",
+              "primary": true
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm",
+              "primary": true
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo",
+              "primary": true
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v",
+              "primary": true
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t",
+              "primary": true
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv",
+              "primary": true
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv",
+              "primary": true
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp",
+              "primary": true
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg",
+              "primary": true
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf",
+              "primary": true
+            },
+            {
+              "ext": "mp3",
+              "mime": "audio/mpeg",
+              "primary": true
+            },
+            {
+              "ext": "wav",
+              "mime": "audio/wav",
+              "primary": true
+            },
+            {
+              "ext": "flac",
+              "mime": "audio/flac",
+              "primary": true
+            },
+            {
+              "ext": "ogg",
+              "mime": "audio/ogg",
+              "primary": true
+            },
+            {
+              "ext": "m4a",
+              "mime": "audio/mp4",
+              "primary": true
+            },
+            {
+              "ext": "aac",
+              "mime": "audio/aac",
+              "primary": true
+            },
+            {
+              "ext": "opus",
+              "mime": "audio/opus",
+              "primary": true
+            }
+          ]
+        },
+        {
+          "path": "studio/trim",
+          "names": {
+            "ar": "قصّ",
+            "en": "Trim",
+            "es": "Cortar",
+            "fr": "Découper",
+            "ja": "切り出し",
+            "zh-Hans": "截取",
+            "zh-Hant": "修剪"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            },
+            {
+              "ext": "mp3",
+              "mime": "audio/mpeg"
+            },
+            {
+              "ext": "wav",
+              "mime": "audio/wav"
+            },
+            {
+              "ext": "flac",
+              "mime": "audio/flac"
+            },
+            {
+              "ext": "ogg",
+              "mime": "audio/ogg"
+            },
+            {
+              "ext": "m4a",
+              "mime": "audio/mp4"
+            },
+            {
+              "ext": "aac",
+              "mime": "audio/aac"
+            },
+            {
+              "ext": "opus",
+              "mime": "audio/opus"
+            }
+          ]
+        },
+        {
+          "path": "studio/compress",
+          "names": {
+            "ar": "ضغط",
+            "en": "Compress",
+            "es": "Comprimir",
+            "fr": "Compresser",
+            "ja": "圧縮",
+            "zh-Hans": "压缩",
+            "zh-Hant": "壓縮"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/extract-audio",
+          "names": {
+            "ar": "استخراج الصوت",
+            "en": "Extract audio",
+            "es": "Extraer el audio",
+            "fr": "Extraire l'audio",
+            "ja": "音声を抽出",
+            "zh-Hans": "提取音频",
+            "zh-Hant": "擷取音訊"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/snapshot",
+          "names": {
+            "ar": "استخراج صورة",
+            "en": "Extract a still",
+            "es": "Extraer un fotograma",
+            "fr": "Extraire une image",
+            "ja": "静止画を抽出",
+            "zh-Hans": "截取静帧",
+            "zh-Hant": "擷取影格"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/gif",
+          "names": {
+            "ar": "إنشاء GIF",
+            "en": "Make a GIF",
+            "es": "Crear un GIF",
+            "fr": "Créer un GIF",
+            "ja": "GIFを作成",
+            "zh-Hans": "制作 GIF",
+            "zh-Hant": "製作 GIF"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/resize",
+          "names": {
+            "ar": "تغيير الحجم",
+            "en": "Resize",
+            "es": "Redimensionar",
+            "fr": "Redimensionner",
+            "ja": "サイズ変更",
+            "zh-Hans": "调整尺寸",
+            "zh-Hant": "調整大小"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/crop",
+          "names": {
+            "ar": "اقتصاص وتأطير",
+            "en": "Crop & frame",
+            "es": "Recortar y encuadrar",
+            "fr": "Rogner et cadrer",
+            "ja": "切り抜き・フレーミング",
+            "zh-Hans": "裁剪与构图",
+            "zh-Hant": "裁切與取景"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/watermark",
+          "names": {
+            "ar": "إضافة علامة مائية",
+            "en": "Add a watermark",
+            "es": "Incrustar un logo",
+            "fr": "Incruster un logo",
+            "ja": "ロゴを重ねる",
+            "zh-Hans": "添加水印",
+            "zh-Hant": "加上浮水印"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/subtitles",
+          "names": {
+            "ar": "دمج الترجمة في الصورة",
+            "en": "Burn in subtitles",
+            "es": "Incrustar subtítulos",
+            "fr": "Incruster des sous-titres",
+            "ja": "字幕を焼き込む",
+            "zh-Hans": "压制字幕",
+            "zh-Hant": "燒錄字幕"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/mxf",
+          "names": {
+            "ar": "تسليم احترافي (MXF، DNxHR، ProRes)",
+            "en": "Pro delivery (MXF, DNxHR, ProRes)",
+            "es": "Entrega profesional (MXF, DNxHR, ProRes)",
+            "fr": "Livraison pro (MXF, DNxHR, ProRes)",
+            "ja": "プロ納品（MXF・DNxHR・ProRes）",
+            "zh-Hans": "专业交付（MXF、DNxHR、ProRes）",
+            "zh-Hant": "專業交付（MXF、DNxHR、ProRes）"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        },
+        {
+          "path": "studio/advanced",
+          "names": {
+            "ar": "التحرير المتقدّم",
+            "en": "Single-file editor",
+            "es": "Edición de video avanzada",
+            "fr": "Édition vidéo avancée",
+            "ja": "詳細編集",
+            "zh-Hans": "单文件编辑",
+            "zh-Hant": "單檔進階編輯"
+          },
+          "files": [
+            {
+              "ext": "mp4",
+              "mime": "video/mp4"
+            },
+            {
+              "ext": "mov",
+              "mime": "video/quicktime"
+            },
+            {
+              "ext": "mkv",
+              "mime": "video/x-matroska"
+            },
+            {
+              "ext": "webm",
+              "mime": "video/webm"
+            },
+            {
+              "ext": "avi",
+              "mime": "video/x-msvideo"
+            },
+            {
+              "ext": "m4v",
+              "mime": "video/x-m4v"
+            },
+            {
+              "ext": "ts",
+              "mime": "video/mp2t"
+            },
+            {
+              "ext": "flv",
+              "mime": "video/x-flv"
+            },
+            {
+              "ext": "wmv",
+              "mime": "video/x-ms-wmv"
+            },
+            {
+              "ext": "3gp",
+              "mime": "video/3gpp"
+            },
+            {
+              "ext": "ogv",
+              "mime": "video/ogg"
+            },
+            {
+              "ext": "mxf",
+              "mime": "application/mxf"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

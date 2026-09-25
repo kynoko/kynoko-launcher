@@ -555,7 +555,7 @@ catalogue in the system's language, falling back to English.
 |---|---|
 | 0 - done | Bridge spike: protocol, guards, write back, LNA measured (Edge, Firefox). |
 | 1 | Skeleton: `files` declaration, file source abstraction with `bridge` and `handle`, generic `/open`, save in place, conflict UI, pre-prompt, no `file_handlers`, desktop install invitation. Office, Photo Studio, Media Studio. |
-| 2 | Kynoko Launcher v1: catalogue, browsers and profiles, shortcuts, associations, agent, inventory and cleanup, i18n. |
+| 2 | Kynoko Launcher v1: catalogue, browsers and profiles, shortcuts, associations, agent, inventory and cleanup, i18n. **Windows slice done** (2026-09-25): bundled catalogue, browser discovery (every channel), per-app browser, HKCU associations with inventory and complete removal, `open` / `launch` / `cleanup`, single-instance agent with the multi-session bridge (ReplaceFileW), NSIS per-user installer running `cleanup` on uninstall, 7-language window. Verified end to end: associate Office, double-click a .docx, edit, Ctrl+S on disk, remove everything, registry back to its prior state. Next: shortcuts, online catalogue refresh, profiles, macOS, Linux. |
 | 3 | Packaging on GitHub Actions for the three systems, checksums, download page and per-OS documentation. |
 | 4 | Android companion APK. ChromeOS manifest. |
 

@@ -1,0 +1,62 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--kynoko-window);
+  color: var(--kynoko-text);
+  font: 15px/1.45 Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+main { padding-block: 20px 28px; padding-inline: 24px; max-inline-size: 760px; margin-inline: auto; }
+
+h1 { font-size: 1.35rem; margin: 0 0 4px; }
+.lead { margin: 0 0 20px; color: var(--kynoko-hint); }
+h2 { font-size: 1rem; margin: 26px 0 10px; }
+
+.card {
+  border: 1px solid var(--kynoko-hairline);
+  border-radius: var(--kynoko-radius);
+  background: var(--kynoko-surface);
+  box-shadow: var(--kynoko-shadow-soft);
+  padding: 14px 16px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  align-items: center;
+  padding-block: 12px;
+  border-block-end: 1px solid var(--kynoko-hairline);
+}
+.row:last-child { border-block-end: 0; }
+.row .name { font-weight: 650; }
+.row .exts {
+  grid-column: 1 / -1;
+  color: var(--kynoko-hint);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+.row .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+select, button {
+  font: inherit;
+  min-block-size: 34px;
+  border-radius: var(--kynoko-radius-field);
+  border: 1px solid var(--kynoko-hairline-strong);
+  background: var(--kynoko-window);
+  color: var(--kynoko-text);
+  padding-inline: 12px;
+}
+button { cursor: pointer; font-weight: 600; transition: border-color 0.15s var(--kynoko-ease); }
+button:hover { border-color: var(--kynoko-primary); }
+button.primary { background: var(--kynoko-brand-gradient); color: #fff; border: 0; }
+button.danger { color: var(--kynoko-danger); }
+:focus-visible { outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
+
+label.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
+.field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
+.error { color: var(--kynoko-danger); margin: 10px 0 0; }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-block-start: 26px; }
