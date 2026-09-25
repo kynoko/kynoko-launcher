@@ -117,7 +117,7 @@ pub fn register_scheme(inventory: &mut Inventory) -> std::io::Result<()> {
 
 #[cfg(not(any(windows, target_os = "linux")))]
 pub fn register_scheme(_inventory: &mut Inventory) -> std::io::Result<()> {
-    // macOS declares it in Info.plist (next milestone).
+    // macOS: declared once in the launcher's Info.plist (CFBundleURLTypes).
     Ok(())
 }
 
@@ -146,6 +146,13 @@ pub fn remove_all(inventory: &mut Inventory) -> std::io::Result<()> {
                 }
                 Artefact::Dir { path } => {
                     let _ = std::fs::remove_dir(path);
+                }
+                Artefact::Tree { path } => {
+                    let _ = std::fs::remove_dir_all(path);
+                }
+                #[cfg(target_os = "macos")]
+                Artefact::MimeDefault { mime, previous, .. } => {
+                    crate::macos::restore_default(mime, previous.as_deref());
                 }
                 #[cfg(target_os = "linux")]
                 Artefact::MimeDefault { mime, desktop, previous } => {
@@ -187,6 +194,9 @@ fn remove(hkcu: &winreg::RegKey, artefact: &Artefact) {
         Artefact::Dir { path } => {
             let _ = std::fs::remove_dir(path);
         }
+        Artefact::Tree { path } => {
+            let _ = std::fs::remove_dir_all(path);
+        }
         Artefact::MimeDefault { .. } => {}
     }
 }
@@ -222,12 +232,22 @@ pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
     crate::linux::unregister(app, inventory)
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
-pub fn register(_app: &App, _settings: &crate::settings::Settings, _inventory: &mut Inventory) -> std::io::Result<()> {
-    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "file associations: not yet on this system"))
+#[cfg(target_os = "macos")]
+pub fn register(app: &App, _settings: &crate::settings::Settings, inventory: &mut Inventory) -> std::io::Result<()> {
+    crate::macos::register(app, inventory)
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
+    crate::macos::unregister(app, inventory)
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn register(_app: &App, _settings: &crate::settings::Settings, _inventory: &mut Inventory) -> std::io::Result<()> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "file associations: not on this system"))
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn unregister(_app: &App, _inventory: &mut Inventory) -> std::io::Result<()> {
     Ok(())
 }

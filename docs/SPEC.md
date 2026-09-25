@@ -577,4 +577,5 @@ catalogue in the system's language, falling back to English.
 | 2026-09-26 | Shortcuts: a Start menu folder per app with its listed facades; icons from the apps' manifests at run time. Browser profiles by default and per app. |
 | 2026-09-26 | Online catalogue served by the platform (`GET /api/public/launcher-catalogue/`, ETag, 304); names from the platform's own bundles; draft facades not listed. |
 | 2026-09-26 | Official builds fetch the Kynoko icon at release time (the repository keeps a neutral one); the bundled catalogue is refreshed from the platform at release time. |
+| 2026-09-26 | macOS: document types declared in the bundle (`Info.mac.plist`, generated from the bundled catalogue, rank Alternate) and made default through LaunchServices on request; files and links arrive as Apple Events; shortcuts are small `.app` bundles in `~/Applications/Kynoko/`. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

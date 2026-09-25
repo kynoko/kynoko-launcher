@@ -1974,10 +1974,12 @@ dependencies = [
 name = "kynoko-launcher"
 version = "0.1.0"
 dependencies = [
+ "core-foundation",
  "dirs 5.0.1",
  "getrandom 0.2.17",
  "image",
  "mslnk",
+ "plist",
  "serde",
  "serde_json",
  "tauri",

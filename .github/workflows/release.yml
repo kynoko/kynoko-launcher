@@ -83,6 +83,12 @@ jobs:
             echo "::warning::platform catalogue unavailable: bundling the committed snapshot"
           fi
 
+      # macOS reads the file types it may handle from the bundle: declare the
+      # ones of the catalogue actually bundled.
+      - name: macOS document types
+        if: runner.os == 'macOS'
+        run: node tools/mac-info-plist.mjs
+
       - name: Build
         working-directory: app
         run: npx tauri build ${{ matrix.args }}

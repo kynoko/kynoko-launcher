@@ -42,7 +42,8 @@
       }
     },
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "infoPlist": "Info.mac.plist"
     }
   }
 }
