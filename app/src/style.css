@@ -30,6 +30,14 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
   border-block-end: 1px solid var(--kynoko-hairline);
 }
 .row:last-child { border-block-end: 0; }
+/* The app the user came from (its menu entry), put forward. */
+.row.focus {
+  margin-inline: -10px;
+  padding-inline: 10px;
+  border-radius: var(--kynoko-radius-sm);
+  background: rgba(var(--kynoko-glow-rgb), 0.1);
+  outline: 1px solid rgba(var(--kynoko-glow-rgb), 0.45);
+}
 .row .name { font-weight: 650; }
 .row .exts {
   grid-column: 1 / -1;

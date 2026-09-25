@@ -1,7 +1,8 @@
 //! Kynoko Launcher (docs/SPEC.md).
 //!
 //! One binary, several roles:
-//! - no argument: the settings window;
+//! - no argument, or `kynoko-launcher://settings?app=<code>` (the apps'
+//!   menu entry): the settings window, on that app;
 //! - `open <file>...`: what a double-click runs; opens each file in the app
 //!   that reads it, through the loopback bridge;
 //! - `launch <app>[/<facade>]`: what a shortcut runs;
@@ -25,7 +26,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::Bridge;
 use catalogue::Catalogue;
@@ -35,8 +36,14 @@ use settings::{Inventory, Settings};
 /// may quit (the browser can take a while to start).
 const FIRST_CONTACT: Duration = Duration::from_secs(120);
 
+/// Added to every app address the launcher opens: the app then knows the
+/// launcher is installed for this browser, and its menu entry opens it
+/// directly instead of offering the download.
+const MARKER: &str = "kynokoLauncher=1";
+
 enum Command {
-    Window,
+    /// The settings window, optionally on one app.
+    Window(Option<String>),
     Open(Vec<PathBuf>),
     Launch(String),
     Cleanup,
@@ -47,14 +54,28 @@ fn parse(args: &[String]) -> Command {
         Some("open") => Command::Open(args[1..].iter().map(PathBuf::from).collect()),
         Some("launch") => Command::Launch(args.get(1).cloned().unwrap_or_default()),
         Some("cleanup") => Command::Cleanup,
-        _ => Command::Window,
+        Some(url) if url.starts_with(&format!("{}:", assoc::SCHEME)) => Command::Window(app_param(url)),
+        _ => Command::Window(None),
     }
+}
+
+/// `kynoko-launcher://settings?app=Office` -> Some("Office"). Anything that
+/// is not a plain app code is ignored: a link must not steer the launcher.
+fn app_param(url: &str) -> Option<String> {
+    let query = url.split_once('?')?.1;
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("app="))
+        .filter(|code| !code.is_empty() && code.len() <= 40 && code.chars().all(|c| c.is_ascii_alphanumeric()))
+        .map(str::to_string)
 }
 
 struct Shared {
     catalogue: Catalogue,
     bridge: Mutex<Option<Bridge>>,
     last_open: Mutex<Option<Instant>>,
+    /// The app the window should put forward (from a `settings?app=` link).
+    focus: Mutex<Option<String>>,
 }
 
 impl Shared {
@@ -97,7 +118,7 @@ fn open_files(shared: &Shared, files: &[PathBuf]) -> Result<(), String> {
             .ok_or_else(|| format!("no Kynoko app opens .{ext}"))?;
         let base = app_url(&settings, app);
         let token = bridge.open(path.clone(), origin_of(&base));
-        let url = format!("{}/open#kynokoBridge=127.0.0.1:{}/{}", base.trim_end_matches('/'), bridge.port, token);
+        let url = format!("{}/open#kynokoBridge=127.0.0.1:{}/{}&{MARKER}", base.trim_end_matches('/'), bridge.port, token);
         launch::open(&url, browser_by_id(settings.browser_for(&app.code)).as_ref()).map_err(|e| e.to_string())?;
     }
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
@@ -109,7 +130,7 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let (code, facade) = target.split_once('/').unwrap_or((target, ""));
     let app = shared.catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
     let settings = Settings::load();
-    let url = format!("{}/{}", app_url(&settings, app).trim_end_matches('/'), facade);
+    let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
     launch::open(&url, browser_by_id(settings.browser_for(code)).as_ref()).map_err(|e| e.to_string())
 }
 
@@ -123,11 +144,15 @@ fn cleanup() -> Result<(), String> {
 fn dispatch(app: &AppHandle, command: Command) {
     let shared = app.state::<Shared>();
     let result = match command {
-        Command::Window => {
+        Command::Window(focus) => {
+            *shared.focus.lock().expect("lock") = focus.clone();
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
+                let _ = w.unminimize();
                 let _ = w.set_focus();
             }
+            // An open window re-reads its state and puts the app forward.
+            let _ = app.emit("focus-app", focus);
             Ok(())
         }
         Command::Open(files) => open_files(&shared, &files),
@@ -179,6 +204,8 @@ struct StateView {
     default_browser: Option<String>,
     catalogue_date: String,
     windows: bool,
+    /// The app to put forward, once.
+    focus: Option<String>,
 }
 
 #[tauri::command]
@@ -201,6 +228,7 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
         default_browser: settings.default_browser.clone(),
         catalogue_date: shared.catalogue.generated_at.clone(),
         windows: cfg!(windows),
+        focus: shared.focus.lock().expect("lock").take(),
     }
 }
 
@@ -264,7 +292,8 @@ fn open_default_apps() -> Result<(), String> {
 pub fn run() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let first = parse(&args);
-    let show_window = matches!(first, Command::Window);
+    let show_window = matches!(first, Command::Window(_));
+    let cleaning = matches!(first, Command::Cleanup);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -274,6 +303,7 @@ pub fn run() {
             catalogue: Catalogue::bundled(),
             bridge: Mutex::new(None),
             last_open: Mutex::new(None),
+            focus: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             get_state,
@@ -286,6 +316,11 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
+            if !cleaning {
+                if let Err(e) = assoc::register_scheme(&mut Inventory::load()) {
+                    eprintln!("kynoko-launcher: cannot register {}://: {e}", assoc::SCHEME);
+                }
+            }
             dispatch(&handle, first);
             if !show_window {
                 watch_idle(handle);
@@ -314,6 +349,15 @@ mod tests {
         assert_eq!(origin_of("https://office.kynoko.com/"), "https://office.kynoko.com");
         assert_eq!(origin_of("https://a.example:8443/x/y"), "https://a.example:8443");
         assert_eq!(origin_of("https://a.example"), "https://a.example");
+    }
+
+    #[test]
+    fn deep_links() {
+        assert_eq!(app_param("kynoko-launcher://settings?app=Office"), Some("Office".into()));
+        assert_eq!(app_param("kynoko-launcher://settings?x=1&app=PhotoStudio"), Some("PhotoStudio".into()));
+        assert_eq!(app_param("kynoko-launcher://settings?app=../../evil"), None);
+        assert_eq!(app_param("kynoko-launcher://settings"), None);
+        assert!(matches!(parse(&["kynoko-launcher://settings?app=Office".into()]), Command::Window(Some(_))));
     }
 
     #[test]

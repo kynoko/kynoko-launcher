@@ -88,6 +88,34 @@ pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The launcher's own address, `kynoko-launcher://`: what the apps' menu
+/// entry opens. Registered at every start (idempotent) and recorded, so the
+/// cleanup takes it away with the rest.
+pub const SCHEME: &str = "kynoko-launcher";
+
+#[cfg(windows)]
+pub fn register_scheme(inventory: &mut Inventory) -> std::io::Result<()> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let exe = std::env::current_exe()?.to_string_lossy().into_owned();
+    let path = format!(r"{CLASSES}\{SCHEME}");
+    inventory.record(Artefact::RegistryKey { path: path.clone() })?;
+    let (key, _) = RegKey::predef(HKEY_CURRENT_USER).create_subkey(&path)?;
+    key.set_value("", &format!("URL:{APPLICATION_NAME}"))?;
+    key.set_value("URL Protocol", &"")?;
+    let (icon, _) = key.create_subkey("DefaultIcon")?;
+    icon.set_value("", &format!("\"{exe}\",0"))?;
+    let (command, _) = key.create_subkey(r"shell\open\command")?;
+    command.set_value("", &format!("\"{exe}\" \"%1\""))?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn register_scheme(_inventory: &mut Inventory) -> std::io::Result<()> {
+    // macOS declares it in Info.plist, Linux in the .desktop file (next milestones).
+    Ok(())
+}
+
 /// Removes EVERYTHING in the inventory, newest first (uninstall, "Remove everything").
 pub fn remove_all(inventory: &mut Inventory) -> std::io::Result<()> {
     #[cfg(windows)]
