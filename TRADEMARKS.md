@@ -20,3 +20,7 @@ build from a modified one.
 
 Unmodified redistribution of official releases, with their name and icons, is
 permitted.
+
+The repository contains a neutral placeholder icon. Official releases, built
+by this repository's release workflow, fetch the Kynoko icon from Kynoko at
+build time; a fork builds with the neutral icon.

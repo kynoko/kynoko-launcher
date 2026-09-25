@@ -56,6 +56,33 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # Official builds wear the Kynoko icon, fetched from Kynoko at build
+      # time: the repository stays free of brand assets (TRADEMARKS.md), and a
+      # fork builds with the neutral icon the repository contains.
+      - name: Brand icon
+        if: github.repository == 'kynoko/kynoko-launcher'
+        shell: bash
+        working-directory: app
+        run: |
+          if curl -fsSL https://kynoko.com/assets/images/icons/icon-512.png -o brand-icon.png; then
+            npx tauri icon brand-icon.png -o src-tauri/icons
+          else
+            echo "::warning::Kynoko icon unavailable: building with the neutral icon"
+          fi
+
+      # The catalogue a first run starts from: the platform's current one when
+      # it answers, else the snapshot committed in the repository.
+      - name: Bundled catalogue
+        if: github.repository == 'kynoko/kynoko-launcher'
+        shell: bash
+        run: |
+          if curl -fsSL https://api.kynoko.com/api/public/launcher-catalogue/ -o fresh.json \
+             && node -e "const c=JSON.parse(require('fs').readFileSync('fresh.json'));if(c.v!==1||!Array.isArray(c.apps)||!c.apps.length)process.exit(1);delete c.success;require('fs').writeFileSync('app/src-tauri/catalogue.json',JSON.stringify(c,null,2)+'\n')"; then
+            echo "bundled catalogue refreshed from the platform"
+          else
+            echo "::warning::platform catalogue unavailable: bundling the committed snapshot"
+          fi
+
       - name: Build
         working-directory: app
         run: npx tauri build ${{ matrix.args }}
