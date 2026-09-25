@@ -19,6 +19,7 @@ mod browsers;
 mod catalogue;
 mod launch;
 mod settings;
+mod shortcuts;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -90,7 +91,7 @@ impl Shared {
 
 /// The address an app is opened at: its own, or the one settings point it to.
 fn app_url(settings: &Settings, app: &catalogue::App) -> String {
-    settings.app_urls.get(&app.code).cloned().unwrap_or_else(|| app.url.clone())
+    settings.url_of(app)
 }
 
 fn origin_of(url: &str) -> String {
@@ -193,6 +194,7 @@ struct AppView {
     name: String,
     extensions: Vec<String>,
     associated: bool,
+    shortcuts: bool,
     browser: Option<String>,
 }
 
@@ -221,6 +223,7 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
                 name: a.name(&lang),
                 extensions: a.extensions(),
                 associated: settings.associated_apps.contains(&a.code),
+                shortcuts: settings.shortcut_apps.contains(&a.code),
                 browser: settings.app_browsers.get(&a.code).cloned(),
             })
             .collect(),
@@ -262,6 +265,21 @@ fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> R
     } else {
         assoc::unregister(app, &mut inventory).map_err(|e| e.to_string())?;
         settings.associated_apps.retain(|c| c != &code);
+    }
+    settings.save().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_shortcuts(shared: tauri::State<'_, Shared>, code: String, on: bool, lang: String) -> Result<(), String> {
+    let app = shared.catalogue.app(&code).ok_or("unknown app")?;
+    let mut settings = Settings::load();
+    let mut inventory = Inventory::load();
+    // Rebuilt from scratch either way: names and icons follow the catalogue.
+    shortcuts::remove(app, &lang, &mut inventory).map_err(|e| e.to_string())?;
+    settings.shortcut_apps.retain(|c| c != &code);
+    if on {
+        shortcuts::create(app, &settings, &lang, &mut inventory).map_err(|e| e.to_string())?;
+        settings.shortcut_apps.push(code);
     }
     settings.save().map_err(|e| e.to_string())
 }
@@ -310,6 +328,7 @@ pub fn run() {
             set_default_browser,
             set_app_browser,
             set_associated,
+            set_shortcuts,
             launch,
             remove_everything,
             open_default_apps

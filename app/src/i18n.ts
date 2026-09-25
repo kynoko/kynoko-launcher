@@ -6,7 +6,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
-  | 'APPS_TITLE' | 'OPEN_FILES' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
+  | 'APPS_TITLE' | 'OPEN_FILES' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE',
   string
 >;
@@ -20,6 +20,7 @@ const FR: Dict = {
   NO_BROWSERS: 'Aucun navigateur trouvé : celui du système sera utilisé.',
   APPS_TITLE: 'Applications',
   OPEN_FILES: 'Ouvrir leurs fichiers',
+  SHORTCUTS: 'Raccourcis',
   OPEN_APP: 'Ouvrir',
   BROWSER_FOR: 'Navigateur de {{app}}',
   DEFAULT_APPS_NOTE: "Windows ne laisse aucun programme se choisir lui-même par défaut : dans les paramètres, choisissez Kynoko Launcher pour les types de fichiers voulus.",
@@ -39,6 +40,7 @@ const EN: Dict = {
   NO_BROWSERS: "No browser found: the system's will be used.",
   APPS_TITLE: 'Apps',
   OPEN_FILES: 'Open their files',
+  SHORTCUTS: 'Shortcuts',
   OPEN_APP: 'Open',
   BROWSER_FOR: 'Browser for {{app}}',
   DEFAULT_APPS_NOTE: 'Windows lets no program make itself the default: in Settings, choose Kynoko Launcher for the file types you want.',
@@ -58,6 +60,7 @@ const ES: Dict = {
   NO_BROWSERS: 'No se ha encontrado ningún navegador: se usará el del sistema.',
   APPS_TITLE: 'Aplicaciones',
   OPEN_FILES: 'Abrir sus archivos',
+  SHORTCUTS: 'Accesos directos',
   OPEN_APP: 'Abrir',
   BROWSER_FOR: 'Navegador de {{app}}',
   DEFAULT_APPS_NOTE: 'Windows no deja que ningún programa se elija a sí mismo como predeterminado: en Configuración, elige Kynoko Launcher para los tipos de archivo que quieras.',
@@ -77,6 +80,7 @@ const JA: Dict = {
   NO_BROWSERS: 'ブラウザーが見つかりません。システムの既定を使います。',
   APPS_TITLE: 'アプリ',
   OPEN_FILES: 'ファイルを開く',
+  SHORTCUTS: 'ショートカット',
   OPEN_APP: '開く',
   BROWSER_FOR: '{{app}} のブラウザー',
   DEFAULT_APPS_NOTE: 'Windows ではプログラムが自分自身を既定に設定できません。設定で、必要なファイルの種類に Kynoko Launcher を選んでください。',
@@ -96,6 +100,7 @@ const ZH_HANS: Dict = {
   NO_BROWSERS: '未找到浏览器：将使用系统默认浏览器。',
   APPS_TITLE: '应用',
   OPEN_FILES: '打开其文件',
+  SHORTCUTS: '快捷方式',
   OPEN_APP: '打开',
   BROWSER_FOR: '{{app}} 的浏览器',
   DEFAULT_APPS_NOTE: 'Windows 不允许程序将自己设为默认：请在设置中为所需的文件类型选择 Kynoko Launcher。',
@@ -115,6 +120,7 @@ const ZH_HANT: Dict = {
   NO_BROWSERS: '找不到瀏覽器：將使用系統預設瀏覽器。',
   APPS_TITLE: '應用程式',
   OPEN_FILES: '開啟其檔案',
+  SHORTCUTS: '捷徑',
   OPEN_APP: '開啟',
   BROWSER_FOR: '{{app}} 的瀏覽器',
   DEFAULT_APPS_NOTE: 'Windows 不允許程式將自己設為預設：請在設定中為所需的檔案類型選擇 Kynoko Launcher。',
@@ -134,6 +140,7 @@ const AR: Dict = {
   NO_BROWSERS: 'لم يُعثر على أي متصفح: سيُستخدم متصفح النظام.',
   APPS_TITLE: 'التطبيقات',
   OPEN_FILES: 'فتح ملفاتها',
+  SHORTCUTS: 'اختصارات',
   OPEN_APP: 'فتح',
   BROWSER_FOR: 'متصفح {{app}}',
   DEFAULT_APPS_NOTE: 'لا يسمح Windows لأي برنامج بأن يجعل نفسه افتراضيًا: في الإعدادات، اختر Kynoko Launcher لأنواع الملفات التي تريدها.',

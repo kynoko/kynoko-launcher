@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { Lang, pickLang, t } from './i18n';
 
 interface Browser { id: string; name: string; engine: string }
-interface AppView { code: string; name: string; extensions: string[]; associated: boolean; browser: string | null }
+interface AppView { code: string; name: string; extensions: string[]; associated: boolean; shortcuts: boolean; browser: string | null }
 interface State {
   apps: AppView[];
   browsers: Browser[];
@@ -74,6 +74,8 @@ async function render(): Promise<void> {
   for (const app of state.apps) {
     const toggle = el('input', { type: 'checkbox', checked: app.associated });
     toggle.addEventListener('change', () => void run(() => invoke('set_associated', { code: app.code, on: toggle.checked })));
+    const shortcuts = el('input', { type: 'checkbox', checked: app.shortcuts });
+    shortcuts.addEventListener('change', () => void run(() => invoke('set_shortcuts', { code: app.code, on: shortcuts.checked, lang })));
     const open = el('button', { type: 'button' }, t(lang, 'OPEN_APP'));
     open.addEventListener('click', () => void run(() => invoke('launch', { target: app.code })));
     appsCard.append(
@@ -83,6 +85,7 @@ async function render(): Promise<void> {
           browserSelect(state, app.browser, t(lang, 'FOLLOW_DEFAULT'), t(lang, 'BROWSER_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_browser', { code: app.code, id }))),
           el('label', { class: 'switch' }, toggle, t(lang, 'OPEN_FILES')),
+          el('label', { class: 'switch' }, shortcuts, t(lang, 'SHORTCUTS')),
           open,
         ),
         // Extensions are technical: left to right whatever the language.

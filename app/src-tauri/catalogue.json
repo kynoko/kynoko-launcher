@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "generatedAt": "2026-09-25T18:05:47.845Z",
+  "generatedAt": "2026-09-25T23:07:38.781Z",
   "apps": [
     {
       "code": "Office",
@@ -746,6 +746,19 @@
           ]
         },
         {
+          "path": "studio/photo",
+          "names": {
+            "ar": "عرض الصور",
+            "en": "Photo slideshow",
+            "es": "Presentación de fotos",
+            "fr": "Diaporama",
+            "ja": "スライドショー",
+            "zh-Hans": "幻灯片",
+            "zh-Hant": "投影片"
+          },
+          "files": []
+        },
+        {
           "path": "studio/gif",
           "names": {
             "ar": "إنشاء GIF",
@@ -1054,6 +1067,45 @@
               "mime": "application/mxf"
             }
           ]
+        },
+        {
+          "path": "studio/merge",
+          "names": {
+            "ar": "دمج",
+            "en": "Merge",
+            "es": "Unir",
+            "fr": "Fusionner",
+            "ja": "結合",
+            "zh-Hans": "合并",
+            "zh-Hant": "合併"
+          },
+          "files": []
+        },
+        {
+          "path": "studio/edit",
+          "names": {
+            "ar": "المونتاج",
+            "en": "Full editor",
+            "es": "Montaje",
+            "fr": "Montage",
+            "ja": "タイムライン編集",
+            "zh-Hans": "剪辑",
+            "zh-Hant": "剪輯"
+          },
+          "files": []
+        },
+        {
+          "path": "studio/bulk",
+          "names": {
+            "ar": "معالجة دفعة",
+            "en": "Process a batch",
+            "es": "Procesar un lote",
+            "fr": "Traiter un lot",
+            "ja": "一括処理",
+            "zh-Hans": "批量处理",
+            "zh-Hant": "處理批次"
+          },
+          "files": []
         },
         {
           "path": "studio/mxf",

@@ -41,9 +41,9 @@ for (const app of apps) {
   if (manifest.appCode !== app.code) {
     throw new Error(`build-catalogue: ${app.manifest} is ${manifest.appCode}, not ${app.code}`);
   }
+  // Every tile: each one is a shortcut; only some also open files.
   const facades = (manifest.tiles ?? [])
-    .filter((tile) => Array.isArray(tile.files) && tile.files.length)
-    .map((tile) => ({ path: tile.path, names: tile.names ?? {}, files: tile.files }));
+    .map((tile) => ({ path: tile.path, names: tile.names ?? {}, files: Array.isArray(tile.files) ? tile.files : [] }));
   out.apps.push({
     code: app.code,
     url: new URL(app.url).href,

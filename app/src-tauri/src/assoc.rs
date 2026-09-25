@@ -135,8 +135,14 @@ pub fn remove_all(inventory: &mut Inventory) -> std::io::Result<()> {
     #[cfg(not(windows))]
     {
         for artefact in inventory.artefacts.clone().iter().rev() {
-            if let Artefact::File { path } = artefact {
-                let _ = std::fs::remove_file(path);
+            match artefact {
+                Artefact::File { path } => {
+                    let _ = std::fs::remove_file(path);
+                }
+                Artefact::Dir { path } => {
+                    let _ = std::fs::remove_dir(path);
+                }
+                _ => {}
             }
             inventory.forget(artefact)?;
         }
@@ -166,6 +172,9 @@ fn remove(hkcu: &winreg::RegKey, artefact: &Artefact) {
         }
         Artefact::File { path } => {
             let _ = std::fs::remove_file(path);
+        }
+        Artefact::Dir { path } => {
+            let _ = std::fs::remove_dir(path);
         }
     }
 }
