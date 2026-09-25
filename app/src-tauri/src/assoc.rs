@@ -26,7 +26,7 @@ fn prog_id(app: &App, ext: &str) -> String {
 
 /// Registers the launcher for every file type `app` opens.
 #[cfg(windows)]
-pub fn register(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
+pub fn register(app: &App, _settings: &crate::settings::Settings, inventory: &mut Inventory) -> std::io::Result<()> {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
 
@@ -110,9 +110,14 @@ pub fn register_scheme(inventory: &mut Inventory) -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn register_scheme(inventory: &mut Inventory) -> std::io::Result<()> {
+    crate::linux::register_scheme(inventory)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn register_scheme(_inventory: &mut Inventory) -> std::io::Result<()> {
-    // macOS declares it in Info.plist, Linux in the .desktop file (next milestones).
+    // macOS declares it in Info.plist (next milestone).
     Ok(())
 }
 
@@ -142,10 +147,16 @@ pub fn remove_all(inventory: &mut Inventory) -> std::io::Result<()> {
                 Artefact::Dir { path } => {
                     let _ = std::fs::remove_dir(path);
                 }
+                #[cfg(target_os = "linux")]
+                Artefact::MimeDefault { mime, desktop, previous } => {
+                    crate::linux::restore_default(mime, desktop, previous.as_deref());
+                }
                 _ => {}
             }
             inventory.forget(artefact)?;
         }
+        #[cfg(target_os = "linux")]
+        crate::linux::after_cleanup();
     }
     Ok(())
 }
@@ -176,6 +187,7 @@ fn remove(hkcu: &winreg::RegKey, artefact: &Artefact) {
         Artefact::Dir { path } => {
             let _ = std::fs::remove_dir(path);
         }
+        Artefact::MimeDefault { .. } => {}
     }
 }
 
@@ -200,12 +212,22 @@ fn notify_shell() {
     unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED as i32, SHCNF_IDLIST, std::ptr::null(), std::ptr::null()) };
 }
 
-#[cfg(not(windows))]
-pub fn register(_app: &App, _inventory: &mut Inventory) -> std::io::Result<()> {
-    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "file associations: Windows only in this build"))
+#[cfg(target_os = "linux")]
+pub fn register(app: &App, settings: &crate::settings::Settings, inventory: &mut Inventory) -> std::io::Result<()> {
+    crate::linux::register(app, settings, inventory)
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
+    crate::linux::unregister(app, inventory)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+pub fn register(_app: &App, _settings: &crate::settings::Settings, _inventory: &mut Inventory) -> std::io::Result<()> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "file associations: not yet on this system"))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn unregister(_app: &App, _inventory: &mut Inventory) -> std::io::Result<()> {
     Ok(())
 }

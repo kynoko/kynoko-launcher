@@ -169,7 +169,9 @@ fn link(exe: &Path, at: &Path, target: &str, icon: Option<&Path>, inventory: &mu
 pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
     #[cfg(windows)]
     let folder = folder_of(app, lang).to_string_lossy().into_owned();
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    let folder = { let _ = lang; crate::linux::shortcut_paths(app).remove(0) };
+    #[cfg(not(any(windows, target_os = "linux")))]
     let folder = { let _ = lang; String::from("\u{0}") };
     let icon_prefix = icons_dir().join(&app.code).to_string_lossy().into_owned();
     let mine: Vec<Artefact> = inventory
@@ -198,9 +200,35 @@ pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Resu
     Ok(())
 }
 
-#[cfg(not(windows))]
+/// Downloads an icon as PNG into `name`.png (Linux desktop entries take PNG).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn icon_png(manifest_url: &str, name: &str, inventory: &mut Inventory) -> Option<PathBuf> {
+    let png = fetch_icon(manifest_url).ok()?;
+    let path = icons_dir().join(format!("{name}.png"));
+    inventory.record(Artefact::File { path: path.to_string_lossy().into_owned() }).ok()?;
+    std::fs::create_dir_all(icons_dir()).ok()?;
+    std::fs::write(&path, png).ok()?;
+    Some(path)
+}
+
+#[cfg(target_os = "linux")]
+pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
+    let mut icons: Vec<(String, String)> = Vec::new();
+    // The closure records nothing itself: icons are fetched first, then recorded.
+    let base = settings.url_of(app);
+    let manifest = format!("{}/manifest.webmanifest", base.trim_end_matches('/'));
+    let png = icon_png(&manifest, &app.code, inventory);
+    if let Some(p) = &png {
+        icons.push((manifest.clone(), p.to_string_lossy().into_owned()));
+    }
+    crate::linux::create_shortcut(app, settings, lang, inventory, |url, _| {
+        icons.iter().find(|(u, _)| u == url).map(|(_, p)| PathBuf::from(p))
+    })
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn create(_app: &App, _settings: &Settings, _lang: &str, _inventory: &mut Inventory) -> std::io::Result<()> {
-    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "shortcuts: Windows only in this build"))
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "shortcuts: not yet on this system"))
 }
 
 #[cfg(test)]
