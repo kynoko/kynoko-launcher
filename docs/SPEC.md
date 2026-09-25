@@ -573,4 +573,8 @@ catalogue in the system's language, falling back to English.
 | 2026-09-25 | ChromeOS kept (after v1); Android companion in phase 2; iOS limits documented honestly. |
 | 2026-09-25 | Window UI: vendor the Boréal design tokens only, no dependency on the private kynoko-ui package. |
 | 2026-09-25 | The Android companion lives in this repository (Tauri 2 mobile, shared Rust core). |
+| 2026-09-26 | The window's menu entry lives in every app (skeleton v0.88.0): the launcher announces itself with a `kynokoLauncher=1` fragment marker and opens through `kynoko-launcher://settings?app=<code>`. |
+| 2026-09-26 | Shortcuts: a Start menu folder per app with its listed facades; icons from the apps' manifests at run time. Browser profiles by default and per app. |
+| 2026-09-26 | Online catalogue served by the platform (`GET /api/public/launcher-catalogue/`, ETag, 304); names from the platform's own bundles; draft facades not listed. |
+| 2026-09-26 | Official builds fetch the Kynoko icon at release time (the repository keeps a neutral one); the bundled catalogue is refreshed from the platform at release time. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
