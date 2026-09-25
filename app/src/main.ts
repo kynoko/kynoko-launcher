@@ -11,6 +11,8 @@ interface State {
   defaultBrowser: string | null;
   defaultProfile: string | null;
   catalogueDate: string;
+  catalogueChecked: number | null;
+  catalogueError: string | null;
   windows: boolean;
   /** The app a `kynoko-launcher://settings?app=` link asked for. */
   focus: string | null;
@@ -128,16 +130,24 @@ async function render(): Promise<void> {
     });
   });
   const date = new Date(state.catalogueDate);
-  root.append(
-    el('div', { class: 'foot' },
-      el('span', { class: 'note' }, t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) })),
-      remove,
-    ),
-  );
+  const check = el('button', { type: 'button' }, t(lang, 'CHECK_NOW'));
+  check.addEventListener('click', () => void run(() => invoke('check_catalogue')));
+  const status = el('span', { class: 'note' }, t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) }));
+  const foot = el('div', { class: 'foot' }, el('span', { class: 'field' }, status, check), remove);
+  root.append(foot);
+  // A failure is said here, quietly, with the last success: never a notification.
+  if (state.catalogueError) {
+    const last = state.catalogueChecked ? new Date(state.catalogueChecked * 1000).toLocaleString(lang) : null;
+    root.append(el('p', { class: 'note' }, last ? t(lang, 'CATALOGUE_FAILED', { date: last }) : t(lang, 'CATALOGUE_BUNDLED')));
+  } else if (!state.catalogueChecked) {
+    root.append(el('p', { class: 'note' }, t(lang, 'CATALOGUE_BUNDLED')));
+  }
   if (state.focus) document.getElementById('app-' + state.focus)?.scrollIntoView({ block: 'center' });
 }
 
 // The running window was asked for again (an app's menu entry): show that app.
 void listen('focus-app', () => void render());
+// The catalogue changed in the background: show the new one.
+void listen('catalogue-updated', () => void render());
 
 void render();

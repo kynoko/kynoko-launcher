@@ -22,7 +22,7 @@ mod settings;
 mod shortcuts;
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -30,7 +30,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::Bridge;
-use catalogue::Catalogue;
+use catalogue::{Cache, Catalogue, Refresh};
 use settings::{Inventory, Settings};
 
 /// How long a freshly opened session waits for its page before the agent
@@ -72,7 +72,10 @@ fn app_param(url: &str) -> Option<String> {
 }
 
 struct Shared {
-    catalogue: Catalogue,
+    /// The catalogue in use: the last good online copy, else the bundled one.
+    catalogue: RwLock<Catalogue>,
+    /// Last manual "check now" (checks are limited to one a minute).
+    last_manual_check: Mutex<Option<Instant>>,
     bridge: Mutex<Option<Bridge>>,
     last_open: Mutex<Option<Instant>>,
     /// The app the window should put forward (from a `settings?app=` link).
@@ -80,6 +83,10 @@ struct Shared {
 }
 
 impl Shared {
+    fn catalogue(&self) -> Catalogue {
+        self.catalogue.read().expect("catalogue lock").clone()
+    }
+
     fn bridge(&self) -> Result<Bridge, String> {
         let mut slot = self.bridge.lock().expect("bridge lock");
         if slot.is_none() {
@@ -112,10 +119,11 @@ fn open_files(shared: &Shared, files: &[PathBuf]) -> Result<(), String> {
     let bridge = shared.bridge()?;
     for path in files {
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let app = shared
-            .catalogue
+        let catalogue = shared.catalogue();
+        let every: Vec<String> = catalogue.apps.iter().map(|a| a.code.clone()).collect();
+        let app = catalogue
             .app_for_ext(&ext, &settings.associated_apps)
-            .or_else(|| shared.catalogue.app_for_ext(&ext, &shared.catalogue.apps.iter().map(|a| a.code.clone()).collect::<Vec<_>>()))
+            .or_else(|| catalogue.app_for_ext(&ext, &every))
             .ok_or_else(|| format!("no Kynoko app opens .{ext}"))?;
         let base = app_url(&settings, app);
         let token = bridge.open(path.clone(), origin_of(&base));
@@ -131,7 +139,8 @@ fn open_files(shared: &Shared, files: &[PathBuf]) -> Result<(), String> {
 /// `launch <app>[/<facade>]`: the app (or one of its facades) in its browser.
 fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let (code, facade) = target.split_once('/').unwrap_or((target, ""));
-    let app = shared.catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
+    let catalogue = shared.catalogue();
+    let app = catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
     let settings = Settings::load();
     let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
     let profile = settings.profile_for(code);
@@ -210,6 +219,10 @@ struct StateView {
     default_browser: Option<String>,
     default_profile: Option<String>,
     catalogue_date: String,
+    /// Last successful check of the online catalogue (Unix seconds), if any.
+    catalogue_checked: Option<u64>,
+    /// Why the last check failed, while it keeps failing.
+    catalogue_error: Option<String>,
     windows: bool,
     /// The app to put forward, once.
     focus: Option<String>,
@@ -217,10 +230,17 @@ struct StateView {
 
 #[tauri::command]
 fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
-    let settings = Settings::load();
+    let mut settings = Settings::load();
+    // The window's language: what shortcuts are named in when the catalogue
+    // later renames them in the background.
+    if settings.ui_lang.as_deref() != Some(lang.as_str()) {
+        settings.ui_lang = Some(lang.clone());
+        let _ = settings.save();
+    }
+    let catalogue = shared.catalogue();
+    let cache = Cache::load();
     StateView {
-        apps: shared
-            .catalogue
+        apps: catalogue
             .apps
             .iter()
             .map(|a| AppView {
@@ -236,7 +256,9 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
         browsers: browsers::installed(),
         default_browser: settings.default_browser.clone(),
         default_profile: settings.default_profile.clone(),
-        catalogue_date: shared.catalogue.generated_at.clone(),
+        catalogue_date: catalogue.generated_at.clone(),
+        catalogue_checked: cache.success_at,
+        catalogue_error: cache.last_error.clone(),
         windows: cfg!(windows),
         focus: shared.focus.lock().expect("lock").take(),
     }
@@ -281,7 +303,8 @@ fn set_app_profile(code: String, id: Option<String>) -> Result<(), String> {
 
 #[tauri::command]
 fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> Result<(), String> {
-    let app = shared.catalogue.app(&code).ok_or("unknown app")?;
+    let catalogue = shared.catalogue();
+    let app = catalogue.app(&code).ok_or("unknown app")?;
     let mut settings = Settings::load();
     let mut inventory = Inventory::load();
     if on {
@@ -298,7 +321,8 @@ fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> R
 
 #[tauri::command]
 fn set_shortcuts(shared: tauri::State<'_, Shared>, code: String, on: bool, lang: String) -> Result<(), String> {
-    let app = shared.catalogue.app(&code).ok_or("unknown app")?;
+    let catalogue = shared.catalogue();
+    let app = catalogue.app(&code).ok_or("unknown app")?;
     let mut settings = Settings::load();
     let mut inventory = Inventory::load();
     // Rebuilt from scratch either way: names and icons follow the catalogue.
@@ -309,6 +333,97 @@ fn set_shortcuts(shared: tauri::State<'_, Shared>, code: String, on: bool, lang:
         settings.shortcut_apps.push(code);
     }
     settings.save().map_err(|e| e.to_string())
+}
+
+/// "Check now": at most once a minute, whatever the button is clicked.
+#[tauri::command]
+fn check_catalogue(app: AppHandle, shared: tauri::State<'_, Shared>) -> Result<(), String> {
+    {
+        let mut last = shared.last_manual_check.lock().expect("lock");
+        if last.map(|t| t.elapsed() < Duration::from_secs(60)).unwrap_or(false) {
+            return Ok(());
+        }
+        *last = Some(Instant::now());
+    }
+    check_online(&app);
+    Ok(())
+}
+
+/// One conditional request for the online catalogue; a changed catalogue is
+/// applied to what the user set up (see reconcile) before it replaces the
+/// one in use.
+fn check_online(app: &AppHandle) {
+    let shared = app.state::<Shared>();
+    let settings = Settings::load();
+    let url = settings.catalogue_url.clone().unwrap_or_else(|| catalogue::DEFAULT_URL.to_string());
+    let mut cache = Cache::load();
+    match catalogue::refresh(&url, &mut cache) {
+        Refresh::Updated(fresh) => {
+            let old = shared.catalogue();
+            reconcile(&old, &fresh);
+            *shared.catalogue.write().expect("catalogue lock") = fresh;
+            let _ = app.emit("catalogue-updated", ());
+        }
+        Refresh::Unchanged => {}
+        // Kept in the cache and shown quietly in the window; never a notification.
+        Refresh::Failed(e) => eprintln!("kynoko-launcher: catalogue not refreshed: {e}"),
+    }
+}
+
+/// What a new catalogue changes in what the user set up (docs/SPEC.md,
+/// section 4): an app that left loses its associations and shortcuts; a
+/// changed app has them rebuilt from its new definition. Nothing is ever
+/// added the user did not ask for: only apps already chosen are touched.
+fn reconcile(old: &Catalogue, new: &Catalogue) {
+    let mut settings = Settings::load();
+    let mut inventory = Inventory::load();
+    let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
+    for code in settings.associated_apps.clone() {
+        let (Some(before), after) = (old.app(&code), new.app(&code)) else { continue };
+        if after.map(|a| a.extensions()) == Some(before.extensions()) {
+            continue;
+        }
+        let _ = assoc::unregister(before, &mut inventory);
+        match after {
+            Some(a) => {
+                let _ = assoc::register(a, &mut inventory);
+            }
+            None => settings.associated_apps.retain(|c| c != &code),
+        }
+    }
+    for code in settings.shortcut_apps.clone() {
+        let (Some(before), after) = (old.app(&code), new.app(&code)) else { continue };
+        if after == Some(before) {
+            continue;
+        }
+        let _ = shortcuts::remove(before, &lang, &mut inventory);
+        match after {
+            Some(a) => {
+                let _ = shortcuts::create(a, &settings, &lang, &mut inventory);
+            }
+            None => settings.shortcut_apps.retain(|c| c != &code),
+        }
+    }
+    let _ = settings.save();
+}
+
+/// The online catalogue, in the background: when due (12 h after the last
+/// success, sooner after a failure), after a random delay so that machines
+/// started together do not all ask together.
+fn watch_catalogue(app: AppHandle) {
+    thread::spawn(move || {
+        let mut jitter = [0u8; 2];
+        let _ = getrandom::getrandom(&mut jitter);
+        // A first run has nothing but the bundled copy: ask soon.
+        let first_delay = if Cache::load().success_at.is_none() { 5 } else { 30 + u16::from_le_bytes(jitter) as u64 % 570 };
+        thread::sleep(Duration::from_secs(first_delay));
+        loop {
+            if catalogue::now() >= Cache::load().due_at() {
+                check_online(&app);
+            }
+            thread::sleep(Duration::from_secs(600));
+        }
+    });
 }
 
 #[tauri::command]
@@ -345,7 +460,8 @@ pub fn run() {
             dispatch(app, parse(&argv[1..]));
         }))
         .manage(Shared {
-            catalogue: Catalogue::bundled(),
+            catalogue: RwLock::new(Cache::load().catalogue()),
+            last_manual_check: Mutex::new(None),
             bridge: Mutex::new(None),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
@@ -358,6 +474,7 @@ pub fn run() {
             set_app_profile,
             set_associated,
             set_shortcuts,
+            check_catalogue,
             launch,
             remove_everything,
             open_default_apps
@@ -368,6 +485,9 @@ pub fn run() {
                 if let Err(e) = assoc::register_scheme(&mut Inventory::load()) {
                     eprintln!("kynoko-launcher: cannot register {}://: {e}", assoc::SCHEME);
                 }
+            }
+            if !cleaning {
+                watch_catalogue(handle.clone());
             }
             dispatch(&handle, first);
             if !show_window {
@@ -411,6 +531,7 @@ mod tests {
     #[test]
     fn routing() {
         let c = Catalogue::bundled();
+        assert!(c.apps.iter().all(|a| a.facades.iter().all(|f| f.listed)), "bundled facades default to listed");
         let all: Vec<String> = c.apps.iter().map(|a| a.code.clone()).collect();
         assert_eq!(c.app_for_ext("docx", &all).map(|a| a.code.as_str()), Some("Office"));
         assert_eq!(c.app_for_ext("JPG", &all).map(|a| a.code.as_str()), Some("PhotoStudio"));

@@ -143,7 +143,8 @@ pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Invent
     let app_icon = icon_file(&format!("{base}/manifest.webmanifest"), &app.code, inventory);
     link(&exe, &folder.join(format!("{}.lnk", file_name(&app.name(lang)))), &app.code, app_icon.as_deref(), inventory)?;
 
-    for facade in &app.facades {
+    // Only published facades: a draft opens its files but gets no shortcut.
+    for facade in app.facades.iter().filter(|f| f.listed) {
         let name = facade.names.get(lang).or_else(|| facade.names.get("en")).cloned().unwrap_or_else(|| facade.path.clone());
         let slug = facade.path.rsplit('/').next().unwrap_or(&facade.path);
         let icon = icon_file(&format!("{base}/assets/manifests/{slug}.webmanifest"), &format!("{}-{slug}", app.code), inventory);

@@ -7,7 +7,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
   | 'APPS_TITLE' | 'OPEN_FILES' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
-  | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE',
+  | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
 >;
 
@@ -31,6 +31,9 @@ const FR: Dict = {
   REMOVE_CONFIRM: "Retirer toutes les associations de fichiers et tous les réglages de Kynoko Launcher ?",
   REMOVED: 'Tout est retiré.',
   CATALOGUE: 'Catalogue du {{date}}',
+  CHECK_NOW: 'Vérifier maintenant',
+  CATALOGUE_FAILED: "Mise à jour du catalogue impossible pour l'instant. Dernière vérification réussie : {{date}}.",
+  CATALOGUE_BUNDLED: 'Catalogue fourni avec le programme, pas encore mis à jour en ligne.',
 };
 
 const EN: Dict = {
@@ -53,6 +56,9 @@ const EN: Dict = {
   REMOVE_CONFIRM: 'Remove every file association and every setting of Kynoko Launcher?',
   REMOVED: 'Everything is removed.',
   CATALOGUE: 'Catalogue of {{date}}',
+  CHECK_NOW: 'Check now',
+  CATALOGUE_FAILED: 'The catalogue cannot be updated right now. Last successful check: {{date}}.',
+  CATALOGUE_BUNDLED: 'Catalogue shipped with the program, not yet updated online.',
 };
 
 const ES: Dict = {
@@ -75,6 +81,9 @@ const ES: Dict = {
   REMOVE_CONFIRM: '¿Quitar todas las asociaciones de archivos y todos los ajustes de Kynoko Launcher?',
   REMOVED: 'Todo se ha quitado.',
   CATALOGUE: 'Catálogo del {{date}}',
+  CHECK_NOW: 'Comprobar ahora',
+  CATALOGUE_FAILED: 'Ahora mismo no se puede actualizar el catálogo. Última comprobación correcta: {{date}}.',
+  CATALOGUE_BUNDLED: 'Catálogo incluido con el programa, aún no actualizado en línea.',
 };
 
 const JA: Dict = {
@@ -97,6 +106,9 @@ const JA: Dict = {
   REMOVE_CONFIRM: 'Kynoko Launcher のファイルの関連付けと設定をすべて削除しますか？',
   REMOVED: 'すべて削除しました。',
   CATALOGUE: '{{date}} のカタログ',
+  CHECK_NOW: '今すぐ確認',
+  CATALOGUE_FAILED: '現在カタログを更新できません。最後に成功した確認：{{date}}。',
+  CATALOGUE_BUNDLED: 'プログラムに同梱のカタログです。まだオンラインで更新されていません。',
 };
 
 const ZH_HANS: Dict = {
@@ -119,6 +131,9 @@ const ZH_HANS: Dict = {
   REMOVE_CONFIRM: '移除 Kynoko Launcher 的所有文件关联和所有设置？',
   REMOVED: '已全部移除。',
   CATALOGUE: '{{date}} 的目录',
+  CHECK_NOW: '立即检查',
+  CATALOGUE_FAILED: '目前无法更新目录。上次成功检查：{{date}}。',
+  CATALOGUE_BUNDLED: '程序自带的目录，尚未在线更新。',
 };
 
 const ZH_HANT: Dict = {
@@ -141,6 +156,9 @@ const ZH_HANT: Dict = {
   REMOVE_CONFIRM: '移除 Kynoko Launcher 的所有檔案關聯和所有設定？',
   REMOVED: '已全部移除。',
   CATALOGUE: '{{date}} 的目錄',
+  CHECK_NOW: '立即檢查',
+  CATALOGUE_FAILED: '目前無法更新目錄。上次成功檢查：{{date}}。',
+  CATALOGUE_BUNDLED: '程式隨附的目錄，尚未在線上更新。',
 };
 
 const AR: Dict = {
@@ -163,6 +181,9 @@ const AR: Dict = {
   REMOVE_CONFIRM: 'هل تريد إزالة جميع اقترانات الملفات وجميع إعدادات Kynoko Launcher؟',
   REMOVED: 'تمت إزالة كل شيء.',
   CATALOGUE: 'كتالوج {{date}}',
+  CHECK_NOW: 'التحقق الآن',
+  CATALOGUE_FAILED: 'لا يمكن تحديث الكتالوج حاليًا. آخر تحقق ناجح: {{date}}.',
+  CATALOGUE_BUNDLED: 'الكتالوج المرفق بالبرنامج، لم يُحدَّث عبر الإنترنت بعد.',
 };
 
 const DICTS: Record<Lang, Dict> = { fr: FR, en: EN, es: ES, ja: JA, 'zh-Hans': ZH_HANS, 'zh-Hant': ZH_HANT, ar: AR };
