@@ -24,6 +24,11 @@ pub struct Settings {
     pub associated_apps: Vec<String>,
     /// Apps that have shortcuts (a Start menu folder with their facades).
     pub shortcut_apps: Vec<String>,
+    /// The online catalogue's address, when not the platform's (testing
+    /// against another environment).
+    pub catalogue_url: Option<String>,
+    /// The window's last language: shortcuts are named in it.
+    pub ui_lang: Option<String>,
     /// Where each app is opened, when not at its catalogue address (testing
     /// against another environment). Never written by the launcher itself.
     pub app_urls: HashMap<String, String>,
@@ -116,6 +121,7 @@ impl Inventory {
 pub fn remove_own_state() {
     let _ = fs::remove_file(dir().join("settings.json"));
     let _ = fs::remove_file(dir().join("inventory.json"));
+    let _ = fs::remove_file(dir().join("catalogue.json"));
     // Emptied by the cleanup (every icon is in the inventory).
     let _ = fs::remove_dir(dir().join("icons"));
     let _ = fs::remove_dir(dir());
