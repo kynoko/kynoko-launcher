@@ -24,6 +24,10 @@ pub struct Browser {
     /// Access permission belong to a profile, so the profile is part of the
     /// choice (docs/SPEC.md, section 5).
     pub profiles: Vec<Profile>,
+    /// How to start it: the program and its fixed arguments (`flatpak run
+    /// org.mozilla.firefox` on Linux), before the launcher's own.
+    #[serde(skip)]
+    pub command: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -39,11 +43,16 @@ pub struct Profile {
 /// The engine, from the executable's name: it decides how a window is opened.
 pub fn engine_of(exe: &str) -> Engine {
     let file = exe.rsplit(['\\', '/']).next().unwrap_or(exe).to_ascii_lowercase();
-    let stem = file.trim_end_matches(".exe");
+    let mut stem = file.trim_end_matches(".exe");
+    // Linux packages name channels as suffixes (google-chrome-stable, firefox-esr).
+    for suffix in ["-stable", "-beta", "-dev", "-unstable", "-nightly", "-esr", "-canary", "-bin"] {
+        stem = stem.strip_suffix(suffix).unwrap_or(stem);
+    }
     match stem {
-        "chrome" | "msedge" | "brave" | "opera" | "launcher" | "vivaldi" | "chromium" | "thorium" | "yandex" => Engine::Chromium,
-        "firefox" | "librewolf" | "waterfox" | "zen" | "floorp" | "mullvadbrowser" => Engine::Gecko,
-        "safari" => Engine::Webkit,
+        "chrome" | "google-chrome" | "msedge" | "microsoft-edge" | "edge" | "brave" | "brave-browser" | "opera"
+        | "launcher" | "vivaldi" | "chromium" | "chromium-browser" | "thorium" | "yandex" | "yandex-browser" => Engine::Chromium,
+        "firefox" | "librewolf" | "waterfox" | "zen" | "zen-browser" | "floorp" | "mullvadbrowser" | "icecat" => Engine::Gecko,
+        "safari" | "epiphany" => Engine::Webkit,
         _ => Engine::Unknown,
     }
 }
@@ -81,14 +90,19 @@ pub fn installed() -> Vec<Browser> {
                 Engine::Gecko => gecko_profiles(&id, &exe),
                 _ => Vec::new(),
             };
-            out.push(Browser { engine, id, name: resolve_indirect(name), exe, profiles });
+            out.push(Browser { engine, id, name: resolve_indirect(name), command: vec![exe.clone()], exe, profiles });
         }
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn installed() -> Vec<Browser> {
+    crate::linux::browsers()
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn installed() -> Vec<Browser> {
     // macOS (LaunchServices) and Linux (.desktop files): next milestone.
     Vec::new()
@@ -117,7 +131,7 @@ fn chromium_profiles(exe: &str) -> Vec<Profile> {
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
-fn parse_local_state(state: &serde_json::Value) -> Vec<Profile> {
+pub(crate) fn parse_local_state(state: &serde_json::Value) -> Vec<Profile> {
     let last = state["profile"]["last_used"].as_str().unwrap_or("Default");
     let mut out: Vec<Profile> = state["profile"]["info_cache"]
         .as_object()
@@ -162,7 +176,7 @@ fn gecko_profiles(id: &str, exe: &str) -> Vec<Profile> {
 /// install (Firefox and Firefox Nightly share the file, not the default). The
 /// install hash is the tail of the registry id (`Firefox-308046B0AF4A39CB`).
 #[cfg_attr(not(windows), allow(dead_code))]
-fn parse_profiles_ini(profiles: &str, installs: &str, browser_id: &str) -> Vec<Profile> {
+pub(crate) fn parse_profiles_ini(profiles: &str, installs: &str, browser_id: &str) -> Vec<Profile> {
     type Section = (String, std::collections::HashMap<String, String>);
     let sections = |text: &str| -> Vec<Section> {
         let mut out: Vec<Section> = Vec::new();
@@ -230,6 +244,10 @@ mod tests {
         assert_eq!(engine_of(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"), Engine::Chromium);
         assert_eq!(engine_of("/Applications/Safari.app/Contents/MacOS/Safari"), Engine::Webkit);
         assert_eq!(engine_of("unknown.exe"), Engine::Unknown);
+        assert_eq!(engine_of("/usr/bin/google-chrome-stable"), Engine::Chromium);
+        assert_eq!(engine_of("/usr/bin/firefox-esr"), Engine::Gecko);
+        assert_eq!(engine_of("microsoft-edge-beta"), Engine::Chromium);
+        assert_eq!(engine_of("epiphany"), Engine::Webkit);
     }
 
     #[test]

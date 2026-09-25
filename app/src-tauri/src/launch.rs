@@ -13,7 +13,8 @@ pub fn open(url: &str, browser: Option<&Browser>, profile: Option<&str>) -> io::
             // Only a profile the browser actually has: a stale choice falls
             // back to the browser's own default rather than creating one.
             let profile = profile.filter(|p| b.profiles.iter().any(|x| x.id == *p));
-            Command::new(&b.exe).args(args_for(&b.engine, url, profile)).spawn().map(|_| ())
+            let (program, fixed) = b.command.split_first().map(|(p, f)| (p.clone(), f.to_vec())).unwrap_or((b.exe.clone(), Vec::new()));
+            Command::new(program).args(fixed).args(args_for(&b.engine, url, profile)).spawn().map(|_| ())
         }
         None => system_default(url),
     }

@@ -18,8 +18,11 @@ mod bridge;
 mod browsers;
 mod catalogue;
 mod launch;
+#[cfg(target_os = "linux")]
+mod linux;
 mod settings;
 mod shortcuts;
+mod xdg;
 
 use std::path::PathBuf;
 use std::sync::{Mutex, RwLock};
@@ -308,7 +311,7 @@ fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> R
     let mut settings = Settings::load();
     let mut inventory = Inventory::load();
     if on {
-        assoc::register(app, &mut inventory).map_err(|e| e.to_string())?;
+        assoc::register(app, &settings, &mut inventory).map_err(|e| e.to_string())?;
         if !settings.associated_apps.contains(&code) {
             settings.associated_apps.push(code);
         }
@@ -386,7 +389,7 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
         let _ = assoc::unregister(before, &mut inventory);
         match after {
             Some(a) => {
-                let _ = assoc::register(a, &mut inventory);
+                let _ = assoc::register(a, &settings, &mut inventory);
             }
             None => settings.associated_apps.retain(|c| c != &code),
         }
