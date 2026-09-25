@@ -19,7 +19,7 @@ fn icons_dir() -> PathBuf {
 }
 
 /// A file name Windows, macOS and Linux all accept.
-fn file_name(name: &str) -> String {
+pub(crate) fn file_name(name: &str) -> String {
     let cleaned: String = name
         .chars()
         .map(|c| if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control() { ' ' } else { c })
@@ -171,7 +171,9 @@ pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Resu
     let folder = folder_of(app, lang).to_string_lossy().into_owned();
     #[cfg(target_os = "linux")]
     let folder = { let _ = lang; crate::linux::shortcut_paths(app).remove(0) };
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    let folder = crate::macos::shortcut_folder(app, lang);
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     let folder = { let _ = lang; String::from("\u{0}") };
     let icon_prefix = icons_dir().join(&app.code).to_string_lossy().into_owned();
     let mine: Vec<Artefact> = inventory
@@ -179,16 +181,24 @@ pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Resu
         .iter()
         .filter(|a| match a {
             Artefact::File { path } => path.starts_with(&folder) || path.starts_with(&icon_prefix),
+            Artefact::Tree { path } => path.starts_with(&folder),
             Artefact::Dir { path } => *path == folder,
             _ => false,
         })
         .cloned()
         .collect();
     // Files first, then the folder (only removed when empty).
-    for a in mine.iter().filter(|a| matches!(a, Artefact::File { .. })).chain(mine.iter().filter(|a| matches!(a, Artefact::Dir { .. }))) {
+    for a in mine
+        .iter()
+        .filter(|a| matches!(a, Artefact::File { .. } | Artefact::Tree { .. }))
+        .chain(mine.iter().filter(|a| matches!(a, Artefact::Dir { .. })))
+    {
         match a {
             Artefact::File { path } => {
                 let _ = std::fs::remove_file(path);
+            }
+            Artefact::Tree { path } => {
+                let _ = std::fs::remove_dir_all(path);
             }
             Artefact::Dir { path } => {
                 let _ = std::fs::remove_dir(path);
@@ -226,9 +236,14 @@ pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Invent
     })
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
+    crate::macos::create_shortcuts(app, settings, lang, inventory, |manifest| fetch_icon(manifest).ok())
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn create(_app: &App, _settings: &Settings, _lang: &str, _inventory: &mut Inventory) -> std::io::Result<()> {
-    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "shortcuts: not yet on this system"))
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "shortcuts: not on this system"))
 }
 
 #[cfg(test)]

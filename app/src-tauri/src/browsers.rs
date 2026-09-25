@@ -102,7 +102,12 @@ pub fn installed() -> Vec<Browser> {
     crate::linux::browsers()
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+pub fn installed() -> Vec<Browser> {
+    crate::macos::browsers()
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn installed() -> Vec<Browser> {
     // macOS (LaunchServices) and Linux (.desktop files): next milestone.
     Vec::new()

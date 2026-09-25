@@ -20,6 +20,8 @@ mod catalogue;
 mod launch;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 mod settings;
 mod shortcuts;
 mod xdg;
@@ -83,6 +85,10 @@ struct Shared {
     last_open: Mutex<Option<Instant>>,
     /// The app the window should put forward (from a `settings?app=` link).
     focus: Mutex<Option<String>>,
+    /// macOS: a file or link arrived as an Apple Event (the window, asked for
+    /// by the bare start that precedes it, is then not shown).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    opened_by_event: std::sync::atomic::AtomicBool,
 }
 
 impl Shared {
@@ -451,6 +457,24 @@ fn open_default_apps() -> Result<(), String> {
     Err("not available on this system".into())
 }
 
+/// macOS: documents and kynoko-launcher:// links, handed over as Apple Events.
+#[cfg(target_os = "macos")]
+fn opened(app: &AppHandle, urls: &[tauri::Url]) {
+    let shared = app.state::<Shared>();
+    shared.opened_by_event.store(true, std::sync::atomic::Ordering::SeqCst);
+    let files: Vec<PathBuf> = urls.iter().filter(|u| u.scheme() == "file").filter_map(|u| u.to_file_path().ok()).collect();
+    if !files.is_empty() {
+        dispatch(app, Command::Open(files));
+    }
+    for link in urls.iter().filter(|u| u.scheme() == assoc::SCHEME) {
+        dispatch(app, Command::Window(app_param(link.as_str())));
+    }
+    let shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false);
+    if !shown {
+        watch_idle(app.clone());
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -468,6 +492,7 @@ pub fn run() {
             bridge: Mutex::new(None),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
+            opened_by_event: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             get_state,
@@ -492,6 +517,21 @@ pub fn run() {
             if !cleaning {
                 watch_catalogue(handle.clone());
             }
+            // macOS starts the launcher WITHOUT arguments for a double-clicked
+            // file, then hands the file over as an Apple Event: wait a moment
+            // before showing the settings window, which that start did not mean.
+            #[cfg(target_os = "macos")]
+            if matches!(first, Command::Window(None)) {
+                let later = handle.clone();
+                thread::spawn(move || {
+                    thread::sleep(Duration::from_millis(800));
+                    let shared = later.state::<Shared>();
+                    if !shared.opened_by_event.load(std::sync::atomic::Ordering::SeqCst) {
+                        dispatch(&later, Command::Window(None));
+                    }
+                });
+                return Ok(());
+            }
             dispatch(&handle, first);
             if !show_window {
                 watch_idle(handle);
@@ -507,8 +547,14 @@ pub fn run() {
                 watch_idle(window.app_handle().clone());
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Kynoko Launcher");
+        .build(tauri::generate_context!())
+        .expect("error while building Kynoko Launcher")
+        .run(|_handle, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &_event {
+                opened(_handle, urls);
+            }
+        });
 }
 
 #[cfg(test)]

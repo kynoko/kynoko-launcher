@@ -46,6 +46,8 @@ pub enum Artefact {
     File { path: String },
     /// A directory we created (removed only if empty).
     Dir { path: String },
+    /// A whole directory tree we created (a macOS shortcut bundle): removed entirely.
+    Tree { path: String },
     /// A default handler we set (Linux mimeapps.list), and the one it
     /// replaced: restored on removal, unless the user changed it since.
     MimeDefault { mime: String, desktop: String, previous: Option<String> },
