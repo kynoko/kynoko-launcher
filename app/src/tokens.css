@@ -1,0 +1,41 @@
+/*
+ * Boréal design tokens (the Kynoko design system), vendored as values only:
+ * this public repository does not depend on the private component library.
+ * Licensed with the rest of the repository (Apache-2.0). Brand assets (logo,
+ * app icons) are not here: see TRADEMARKS.md.
+ */
+:root {
+  --kynoko-primary: #6366f1;
+  --kynoko-glow-rgb: 99, 102, 241;
+  --kynoko-brand-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --kynoko-text: #1c1f26;
+  --kynoko-hint: #5b6180;
+  --kynoko-window: #ffffff;
+  --kynoko-window-bar: #f3f4f8;
+  --kynoko-surface: rgba(255, 255, 255, 0.82);
+  --kynoko-hairline: rgba(15, 18, 30, 0.09);
+  --kynoko-hairline-strong: rgba(15, 18, 30, 0.16);
+  --kynoko-shadow-soft: 0 10px 34px rgba(15, 18, 30, 0.12);
+  --kynoko-radius: 16px 4px;
+  --kynoko-radius-sm: 12px 3px;
+  --kynoko-radius-field: 12px;
+  --kynoko-control-height: 41px;
+  --kynoko-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --kynoko-danger: #d13a4a;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --kynoko-text: #e7e9f3;
+    --kynoko-hint: #a8aec9;
+    --kynoko-window: #1b1d2a;
+    --kynoko-window-bar: #23263a;
+    --kynoko-surface: rgba(28, 30, 44, 0.82);
+    --kynoko-hairline: rgba(255, 255, 255, 0.1);
+    --kynoko-hairline-strong: rgba(255, 255, 255, 0.18);
+    --kynoko-shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.4);
+    --kynoko-danger: #ff6b78;
+    color-scheme: dark;
+  }
+}
