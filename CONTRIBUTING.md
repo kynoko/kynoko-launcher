@@ -1,6 +1,6 @@
-# Kynoko Applications - working rules
+# Kynoko Launcher - working rules
 
-**This repository is PUBLIC** (GitHub `kynoko/kynoko-applications`), unlike
+**This repository is PUBLIC** (GitHub `kynoko/kynoko-launcher`), unlike
 its neighbours in `apps/kynoko/` and everything in `apps/kynoko-apps/`, which
 are private (GitLab). Everything committed here is published to the world.
 
