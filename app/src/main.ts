@@ -48,6 +48,11 @@ function labelOf(b: Browser): string {
   return b.id === EMBEDDED ? t(lang, 'EMBEDDED') : b.name;
 }
 
+/** Whether the launcher can open `b` as an app window on this system. */
+function hasAppMode(b: Browser, os: string): boolean {
+  return b.engine === 'chromium' || b.engine === 'embedded' || (b.engine === 'gecko' && os === 'windows');
+}
+
 function browserSelect(state: State, value: string | null, first: string, label: string, onChange: (id: string | null) => void) {
   const select = el('select', { ariaLabel: label });
   select.append(el('option', { value: '' }, first));
@@ -139,6 +144,12 @@ async function render(): Promise<void> {
     ),
   );
   if (state.browsers.length < 2) browserCard.append(el('p', { class: 'note' }, t(lang, 'NO_BROWSERS')));
+  // A browser that cannot give an app window (Opera ignores --app, verified;
+  // Safari; Firefox outside Windows): said, with the way to get one.
+  const plain = [state.defaultBrowser, ...state.apps.map((a) => a.browser)]
+    .map((id) => state.browsers.find((b) => b.id === id))
+    .filter((b): b is Browser => !!b && !hasAppMode(b, state.os));
+  for (const b of new Set(plain)) browserCard.append(el('p', { class: 'note' }, t(lang, 'NO_APP_MODE', { browser: b.name })));
   if (state.defaultBrowser === EMBEDDED || state.apps.some((a) => a.browser === EMBEDDED)) {
     browserCard.append(el('p', { class: 'note' }, t(lang, 'EMBEDDED_HINT')));
   }
