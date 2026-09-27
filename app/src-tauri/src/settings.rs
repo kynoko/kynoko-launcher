@@ -26,6 +26,10 @@ pub struct Settings {
     /// Exclusions rather than a list of chosen types: a type the app learns
     /// later is associated like the others, as the app switch promised.
     pub excluded_exts: HashMap<String, Vec<String>>,
+    /// Menu entries the user took out, by app code: "" is the app itself,
+    /// otherwise a facade's path. Exclusions: a facade the app gains later
+    /// gets its entry like the others.
+    pub excluded_shortcuts: HashMap<String, Vec<String>>,
     /// Apps that have shortcuts (a Start menu folder with their facades).
     pub shortcut_apps: Vec<String>,
     /// The online catalogue's address, when not the platform's (testing
@@ -64,6 +68,10 @@ pub enum Artefact {
     Dir { path: String },
     /// A whole directory tree we created (a macOS shortcut bundle): removed entirely.
     Tree { path: String },
+    /// A menu entry of one app (a file, or a macOS bundle or folder), in a
+    /// place several apps share: the app is named, so that one app's entries
+    /// go without touching the others'.
+    Shortcut { path: String, app: String },
     /// A default handler we set (Linux mimeapps.list), and the one it
     /// replaced: restored on removal, unless the user changed it since.
     MimeDefault { mime: String, desktop: String, previous: Option<String> },
@@ -120,6 +128,11 @@ impl Settings {
 
     pub fn gateway(&self) -> String {
         self.gateway_url.clone().unwrap_or_else(|| "https://launch.kynoko.com/".to_string())
+    }
+
+    /// Whether `app`'s menu entry `key` ("" = the app, else a facade path) is kept.
+    pub fn shortcut_chosen(&self, app: &str, key: &str) -> bool {
+        !self.excluded_shortcuts.get(app).is_some_and(|x| x.iter().any(|k| k == key))
     }
 
     /// Whether files of type `ext` go to `app` (when the app is associated).

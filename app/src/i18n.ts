@@ -6,7 +6,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE'
-  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUTS_WINDOWS' | 'SHORTCUTS_MACOS' | 'SHORTCUTS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
+  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUTS_WINDOWS' | 'SHORTCUTS_MACOS' | 'SHORTCUTS_LINUX' | 'SHORTCUT_ITEMS' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
 >;
@@ -32,6 +32,7 @@ const FR: Dict = {
   SHORTCUTS_WINDOWS: "Ajouter au menu Démarrer",
   SHORTCUTS_MACOS: "Ajouter au dossier Applications",
   SHORTCUTS_LINUX: "Ajouter au menu des applications",
+  SHORTCUT_ITEMS: "Raccourcis",
   OPEN_APP: 'Ouvrir {{app}}',
   OPEN: "Ouvrir",
   BROWSER_FOR: 'Navigateur de {{app}}',
@@ -67,6 +68,7 @@ const EN: Dict = {
   SHORTCUTS_WINDOWS: "Add to the Start menu",
   SHORTCUTS_MACOS: "Add to the Applications folder",
   SHORTCUTS_LINUX: "Add to the applications menu",
+  SHORTCUT_ITEMS: "Shortcuts",
   OPEN_APP: 'Open {{app}}',
   OPEN: "Open",
   BROWSER_FOR: 'Browser for {{app}}',
@@ -102,6 +104,7 @@ const ES: Dict = {
   SHORTCUTS_WINDOWS: "Añadir al menú Inicio",
   SHORTCUTS_MACOS: "Añadir a la carpeta Aplicaciones",
   SHORTCUTS_LINUX: "Añadir al menú de aplicaciones",
+  SHORTCUT_ITEMS: "Accesos directos",
   OPEN_APP: 'Abrir {{app}}',
   OPEN: "Abrir",
   BROWSER_FOR: 'Navegador de {{app}}',
@@ -137,6 +140,7 @@ const JA: Dict = {
   SHORTCUTS_WINDOWS: "スタートメニューに追加",
   SHORTCUTS_MACOS: "アプリケーションフォルダに追加",
   SHORTCUTS_LINUX: "アプリケーションメニューに追加",
+  SHORTCUT_ITEMS: "ショートカット",
   OPEN_APP: '{{app}} を開く',
   OPEN: "開く",
   BROWSER_FOR: '{{app}} のブラウザー',
@@ -172,6 +176,7 @@ const ZH_HANS: Dict = {
   SHORTCUTS_WINDOWS: "添加到“开始”菜单",
   SHORTCUTS_MACOS: "添加到“应用程序”文件夹",
   SHORTCUTS_LINUX: "添加到应用程序菜单",
+  SHORTCUT_ITEMS: "快捷方式",
   OPEN_APP: '打开 {{app}}',
   OPEN: "打开",
   BROWSER_FOR: '{{app}} 的浏览器',
@@ -207,6 +212,7 @@ const ZH_HANT: Dict = {
   SHORTCUTS_WINDOWS: "新增至「開始」功能表",
   SHORTCUTS_MACOS: "新增至「應用程式」檔案夾",
   SHORTCUTS_LINUX: "新增至應用程式選單",
+  SHORTCUT_ITEMS: "捷徑",
   OPEN_APP: '開啟 {{app}}',
   OPEN: "開啟",
   BROWSER_FOR: '{{app}} 的瀏覽器',
@@ -242,6 +248,7 @@ const AR: Dict = {
   SHORTCUTS_WINDOWS: "إضافة إلى قائمة ابدأ",
   SHORTCUTS_MACOS: "إضافة إلى مجلد التطبيقات",
   SHORTCUTS_LINUX: "إضافة إلى قائمة التطبيقات",
+  SHORTCUT_ITEMS: "الاختصارات",
   OPEN_APP: 'فتح {{app}}',
   OPEN: "فتح",
   BROWSER_FOR: 'متصفح {{app}}',

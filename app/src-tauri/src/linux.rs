@@ -285,37 +285,59 @@ pub fn after_cleanup() {
 
 /* --------------------------------------------------------------- shortcuts */
 
-/// One desktop entry per app, its listed facades as actions (the right-click
-/// submenu of GNOME and KDE). Icons: the manifests' PNGs, as is.
-pub fn create_shortcut(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory, icon: impl Fn(&str, &str) -> Option<PathBuf>) -> std::io::Result<()> {
-    let base = settings.url_of(app);
-    let base = base.trim_end_matches('/');
-    let exe = xdg::exec_quote(&exe());
-    let actions: Vec<(String, String, String)> = app
-        .facades
-        .iter()
-        .filter(|f| f.listed)
-        .map(|f| {
-            let id: String = f.path.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
-            let name = f.names.get(lang).or_else(|| f.names.get("en")).cloned().unwrap_or_else(|| f.path.clone());
-            (id, name, format!("{exe} launch {}/{}", app.code, f.path))
-        })
-        .collect();
-    let mut fields = vec![
-        ("Type", "Application".to_string()),
-        ("Name", app.name(lang)),
-        ("Exec", format!("{exe} launch {}", app.code)),
-        ("Categories", "Office;".to_string()),
-    ];
-    if let Some(png) = icon(&format!("{base}/manifest.webmanifest"), &app.code) {
-        fields.push(("Icon", png.to_string_lossy().into_owned()));
-    }
-    let path = applications().join(format!("kynoko-{}.desktop", app.code));
-    write_recorded(&path, &xdg::render_entry(&fields, &actions), inventory)?;
-    let _ = Command::new("update-desktop-database").arg(applications()).status();
-    Ok(())
+/// The app's own entry: also where launcher 0.2.6 and before put the app
+/// with its facades as actions (see shortcuts::remove).
+pub fn main_entry(app: &App) -> String {
+    applications().join(format!("kynoko-{}.desktop", app.code)).to_string_lossy().into_owned()
 }
 
-pub fn shortcut_paths(app: &App) -> Vec<String> {
-    vec![applications().join(format!("kynoko-{}.desktop", app.code)).to_string_lossy().into_owned()]
+/// One desktop entry per kept item, in the "Kynoko" submenu (category
+/// X-Kynoko, see ensure_menu).
+pub fn write_shortcut(app: &App, item: &crate::shortcuts::Item, icon: Option<&Path>, inventory: &mut Inventory) -> std::io::Result<()> {
+    let path = if item.slug.is_empty() {
+        PathBuf::from(main_entry(app))
+    } else {
+        let slug: String = item.slug.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+        applications().join(format!("kynoko-{}--{slug}.desktop", app.code))
+    };
+    let mut fields = vec![
+        ("Type", "Application".to_string()),
+        ("Name", item.name.clone()),
+        ("Exec", format!("{} launch {}", xdg::exec_quote(&exe()), item.target)),
+        ("Categories", "X-Kynoko;".to_string()),
+    ];
+    if let Some(png) = icon {
+        fields.push(("Icon", png.to_string_lossy().into_owned()));
+    }
+    inventory.record(Artefact::Shortcut { path: path.to_string_lossy().into_owned(), app: app.code.clone() })?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(&path, xdg::render_entry(&fields, &[]))
+}
+
+fn config_home() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".config"))
+}
+
+/// The "Kynoko" submenu: a merged menu file and its directory entry, shared
+/// by every app (removed with the last app's entries).
+pub fn menu_files() -> Vec<String> {
+    vec![
+        config_home().join("menus/applications-merged/kynoko-launcher.menu").to_string_lossy().into_owned(),
+        data_home().join("desktop-directories/kynoko-launcher.directory").to_string_lossy().into_owned(),
+    ]
+}
+
+pub fn ensure_menu(inventory: &mut Inventory) -> std::io::Result<()> {
+    let files = menu_files();
+    let menu = "<!DOCTYPE Menu PUBLIC \"-//freedesktop//DTD Menu 1.0//EN\"\n \"http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd\">\n\
+<Menu>\n  <Name>Applications</Name>\n  <Menu>\n    <Name>Kynoko</Name>\n    <Directory>kynoko-launcher.directory</Directory>\n\
+    <Include><Category>X-Kynoko</Category></Include>\n  </Menu>\n</Menu>\n";
+    write_recorded(Path::new(&files[0]), menu, inventory)?;
+    write_recorded(Path::new(&files[1]), "[Desktop Entry]\nType=Directory\nName=Kynoko\n", inventory)
+}
+
+pub fn refresh_menus() {
+    let _ = Command::new("update-desktop-database").arg(applications()).status();
 }

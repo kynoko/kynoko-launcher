@@ -68,6 +68,7 @@ label.chip {
 }
 label.chip:has(input:not(:checked)) { color: var(--kynoko-hint); text-decoration: line-through; }
 label.chip input { margin: 0; }
+label.chip.main { font-weight: 650; }
 .types .bulk { display: flex; gap: 12px; }
 button.link {
   min-block-size: 0;

@@ -171,6 +171,7 @@ pub fn remove_all(inventory: &mut Inventory) -> std::io::Result<()> {
                 Artefact::Tree { path } => {
                     let _ = std::fs::remove_dir_all(path);
                 }
+                Artefact::Shortcut { path, .. } => crate::shortcuts::remove_path(path),
                 #[cfg(target_os = "macos")]
                 Artefact::MimeDefault { mime, previous, .. } => {
                     crate::macos::restore_default(mime, previous.as_deref());
@@ -218,6 +219,7 @@ fn remove(hkcu: &winreg::RegKey, artefact: &Artefact) {
         Artefact::Tree { path } => {
             let _ = std::fs::remove_dir_all(path);
         }
+        Artefact::Shortcut { path, .. } => crate::shortcuts::remove_path(path),
         Artefact::MimeDefault { .. } => {}
     }
 }

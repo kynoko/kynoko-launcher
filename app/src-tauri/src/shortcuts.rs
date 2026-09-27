@@ -164,43 +164,100 @@ pub(crate) fn remove_type_icons(app: &App, inventory: &mut Inventory) -> std::io
     Ok(())
 }
 
+/// One menu entry of an app: the app itself (`key` ""), or one of its listed
+/// facades (`key` = the facade's path).
+pub struct Item {
+    pub key: String,
+    /// In a shared menu: "Media Studio", "Media Studio - Convertir" (Windows
+    /// sorts them together, the app first).
+    pub name: String,
+    /// Inside the app's own folder (macOS): "Media Studio", "Convertir".
+    pub short: String,
+    /// The `launch` argument: "MediaStudio" or "MediaStudio/studio/convert".
+    pub target: String,
+    pub manifest: String,
+    /// Unique within the app, for file names: "" (the app) or the facade slug.
+    pub slug: String,
+}
+
+/// Every entry `app` can have, the app first.
+pub fn all_items(app: &App, settings: &Settings, lang: &str) -> Vec<Item> {
+    let base = settings.url_of(app);
+    let base = base.trim_end_matches('/');
+    let name = app.name(lang);
+    let mut out = vec![Item {
+        key: String::new(),
+        name: name.clone(),
+        short: name.clone(),
+        target: app.code.clone(),
+        manifest: format!("{base}/manifest.webmanifest"),
+        slug: String::new(),
+    }];
+    // Only published facades: a draft opens its files but gets no entry.
+    for f in app.facades.iter().filter(|f| f.listed) {
+        let short = f.name(lang);
+        out.push(Item {
+            key: f.path.clone(),
+            name: format!("{name} - {short}"),
+            short,
+            target: format!("{}/{}", app.code, f.path),
+            manifest: facade_manifest(base, f),
+            slug: f.slug().to_string(),
+        });
+    }
+    out
+}
+
+/// The entries the user kept.
+fn chosen(app: &App, settings: &Settings, lang: &str) -> Vec<Item> {
+    all_items(app, settings, lang).into_iter().filter(|i| settings.shortcut_chosen(&app.code, &i.key)).collect()
+}
+
+/// The name an entry's icon file is kept under.
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+fn icon_name(app: &App, item: &Item) -> String {
+    if item.slug.is_empty() { app.code.clone() } else { format!("{}-{}", app.code, item.slug) }
+}
+
+/// A recorded entry, file or bundle, gone.
+pub fn remove_path(path: &str) {
+    let p = Path::new(path);
+    if p.is_dir() {
+        let _ = std::fs::remove_dir_all(p);
+    } else {
+        let _ = std::fs::remove_file(p);
+    }
+}
+
 #[cfg(windows)]
 fn start_menu() -> PathBuf {
     dirs::data_dir().unwrap_or_default().join(r"Microsoft\Windows\Start Menu\Programs")
 }
 
+/// The launcher's one folder in the Start menu. Windows shows a single level
+/// of folders there (deeper ones are flattened), so the apps and their
+/// facades sit side by side: "Media Studio", "Media Studio - Convertir".
 #[cfg(windows)]
-fn folder_of(app: &App, lang: &str) -> PathBuf {
-    start_menu().join(file_name(&app.name(lang)))
+fn kynoko_folder() -> PathBuf {
+    start_menu().join("Kynoko")
 }
 
-/// Creates the app's folder in the Start menu: the app, then its facades.
 #[cfg(windows)]
 pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
     let exe = std::env::current_exe()?;
-    let base = settings.url_of(app);
-    let base = base.trim_end_matches('/');
-    let folder = folder_of(app, lang);
+    let folder = kynoko_folder();
     inventory.record(Artefact::Dir { path: folder.to_string_lossy().into_owned() })?;
     std::fs::create_dir_all(&folder)?;
-
-    let app_icon = icon_file(&format!("{base}/manifest.webmanifest"), &app.code, inventory);
-    link(&exe, &folder.join(format!("{}.lnk", file_name(&app.name(lang)))), &app.code, app_icon.as_deref(), inventory)?;
-
-    // Only published facades: a draft opens its files but gets no shortcut.
-    for facade in app.facades.iter().filter(|f| f.listed) {
-        let name = facade.names.get(lang).or_else(|| facade.names.get("en")).cloned().unwrap_or_else(|| facade.path.clone());
-        let slug = facade.path.rsplit('/').next().unwrap_or(&facade.path);
-        let icon = icon_file(&format!("{base}/assets/manifests/{slug}.webmanifest"), &format!("{}-{slug}", app.code), inventory);
-        let target = format!("{}/{}", app.code, facade.path);
-        link(&exe, &folder.join(format!("{}.lnk", file_name(&name))), &target, icon.as_deref(), inventory)?;
+    for item in chosen(app, settings, lang) {
+        let icon = icon_file(&item.manifest, &icon_name(app, &item), inventory);
+        link(&exe, &folder.join(format!("{}.lnk", file_name(&item.name))), &item.target, icon.as_deref(), &app.code, inventory)?;
     }
     Ok(())
 }
 
 #[cfg(windows)]
-fn link(exe: &Path, at: &Path, target: &str, icon: Option<&Path>, inventory: &mut Inventory) -> std::io::Result<()> {
-    inventory.record(Artefact::File { path: at.to_string_lossy().into_owned() })?;
+fn link(exe: &Path, at: &Path, target: &str, icon: Option<&Path>, app: &str, inventory: &mut Inventory) -> std::io::Result<()> {
+    inventory.record(Artefact::Shortcut { path: at.to_string_lossy().into_owned(), app: app.to_string() })?;
     let mut sl = mslnk::ShellLink::new(exe).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     sl.set_arguments(Some(format!("launch {target}")));
     if let Some(icon) = icon {
@@ -209,35 +266,58 @@ fn link(exe: &Path, at: &Path, target: &str, icon: Option<&Path>, inventory: &mu
     sl.create_lnk(at).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
 }
 
-/// Removes the app's shortcuts, its icons, and its folder once empty.
-pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
+/// Where launcher 0.2.6 and before put an app's entries: its own folder
+/// (Windows, macOS) or one entry with the facades as actions (Linux). Still
+/// cleaned, so that an update moves them into the shared place.
+fn legacy_place(app: &App, lang: &str) -> String {
     #[cfg(windows)]
-    let folder = folder_of(app, lang).to_string_lossy().into_owned();
-    #[cfg(target_os = "linux")]
-    let folder = { let _ = lang; crate::linux::shortcut_paths(app).remove(0) };
+    return start_menu().join(file_name(&app.name(lang))).to_string_lossy().into_owned();
     #[cfg(target_os = "macos")]
-    let folder = crate::macos::shortcut_folder(app, lang);
+    return crate::macos::shortcut_folder(app, lang);
+    #[cfg(target_os = "linux")]
+    return { let _ = lang; crate::linux::main_entry(app) };
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
-    let folder = { let _ = lang; String::from("\u{0}") };
+    return { let _ = (app, lang); String::from("\u{0}") };
+}
+
+/// What several apps share (the Kynoko folder or menu): removed with the
+/// last app's entries.
+fn shared_places() -> Vec<String> {
+    #[cfg(windows)]
+    return vec![kynoko_folder().to_string_lossy().into_owned()];
+    #[cfg(target_os = "macos")]
+    return vec![crate::macos::kynoko_folder()];
+    #[cfg(target_os = "linux")]
+    return crate::linux::menu_files();
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    return Vec::new();
+}
+
+/// Removes the app's entries and their icons, the shared place once no app
+/// has an entry left, and what an older launcher left for this app.
+pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
+    let legacy = legacy_place(app, lang);
     let icon_prefix = icons_dir().join(&app.code).to_string_lossy().into_owned();
     let mine: Vec<Artefact> = inventory
         .artefacts
         .iter()
         .filter(|a| match a {
-            Artefact::File { path } => path.starts_with(&folder) || path.starts_with(&icon_prefix),
-            Artefact::Tree { path } => path.starts_with(&folder),
-            Artefact::Dir { path } => *path == folder,
+            Artefact::Shortcut { app: owner, .. } => *owner == app.code,
+            Artefact::File { path } => path.starts_with(&legacy) || path.starts_with(&icon_prefix),
+            Artefact::Tree { path } => path.starts_with(&legacy),
+            Artefact::Dir { path } => *path == legacy,
             _ => false,
         })
         .cloned()
         .collect();
-    // Files first, then the folder (only removed when empty).
+    // Entries and files first, then a folder (only removed when empty).
     for a in mine
         .iter()
-        .filter(|a| matches!(a, Artefact::File { .. } | Artefact::Tree { .. }))
+        .filter(|a| !matches!(a, Artefact::Dir { .. }))
         .chain(mine.iter().filter(|a| matches!(a, Artefact::Dir { .. })))
     {
         match a {
+            Artefact::Shortcut { path, .. } => remove_path(path),
             Artefact::File { path } => {
                 let _ = std::fs::remove_file(path);
             }
@@ -250,6 +330,22 @@ pub fn remove(app: &App, lang: &str, inventory: &mut Inventory) -> std::io::Resu
             _ => {}
         }
         inventory.forget(a)?;
+    }
+    if !inventory.artefacts.iter().any(|a| matches!(a, Artefact::Shortcut { .. })) {
+        for place in shared_places() {
+            for a in inventory.artefacts.clone() {
+                match &a {
+                    Artefact::Dir { path } if *path == place => {
+                        let _ = std::fs::remove_dir(path);
+                    }
+                    Artefact::File { path } if *path == place => {
+                        let _ = std::fs::remove_file(path);
+                    }
+                    _ => continue,
+                }
+                inventory.forget(&a)?;
+            }
+        }
     }
     Ok(())
 }
@@ -265,24 +361,23 @@ fn icon_png(manifest_url: &str, name: &str, inventory: &mut Inventory) -> Option
     Some(path)
 }
 
+/// Linux: a desktop entry per kept item, gathered under a "Kynoko" submenu
+/// where the desktop reads merged menus (KDE, Xfce, MATE, Cinnamon).
 #[cfg(target_os = "linux")]
 pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
-    let mut icons: Vec<(String, String)> = Vec::new();
-    // The closure records nothing itself: icons are fetched first, then recorded.
-    let base = settings.url_of(app);
-    let manifest = format!("{}/manifest.webmanifest", base.trim_end_matches('/'));
-    let png = icon_png(&manifest, &app.code, inventory);
-    if let Some(p) = &png {
-        icons.push((manifest.clone(), p.to_string_lossy().into_owned()));
+    crate::linux::ensure_menu(inventory)?;
+    for item in chosen(app, settings, lang) {
+        let png = icon_png(&item.manifest, &icon_name(app, &item), inventory);
+        crate::linux::write_shortcut(app, &item, png.as_deref(), inventory)?;
     }
-    crate::linux::create_shortcut(app, settings, lang, inventory, |url, _| {
-        icons.iter().find(|(u, _)| u == url).map(|(_, p)| PathBuf::from(p))
-    })
+    crate::linux::refresh_menus();
+    Ok(())
 }
 
+/// macOS: Applications > Kynoko > <app> > the app and its facades.
 #[cfg(target_os = "macos")]
 pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
-    crate::macos::create_shortcuts(app, settings, lang, inventory, |manifest| fetch_icon(manifest).ok())
+    crate::macos::create_shortcuts(app, &chosen(app, settings, lang), lang, inventory, |manifest| fetch_icon(manifest).ok())
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]

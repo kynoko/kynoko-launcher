@@ -230,6 +230,11 @@ pub fn shortcut_folder(app: &App, lang: &str) -> String {
     folder_of(app, lang).to_string_lossy().into_owned()
 }
 
+/// ~/Applications/Kynoko: shared by every app's folder.
+pub fn kynoko_folder() -> String {
+    home().join("Applications/Kynoko").to_string_lossy().into_owned()
+}
+
 /// An .icns holding one PNG frame (macOS reads PNG inside icns since 10.7).
 pub fn png_to_icns(png: &[u8]) -> Vec<u8> {
     let size = image::load_from_memory_with_format(png, image::ImageFormat::Png).map(|i| i.width()).unwrap_or(512);
@@ -250,8 +255,8 @@ pub fn png_to_icns(png: &[u8]) -> Vec<u8> {
 }
 
 /// One shortcut: `<name>.app` running `kynoko-launcher launch <target>`.
-fn bundle(at: &Path, name: &str, target: &str, id_suffix: &str, icon: Option<&[u8]>, inventory: &mut Inventory) -> std::io::Result<()> {
-    inventory.record(Artefact::Tree { path: at.to_string_lossy().into_owned() })?;
+fn bundle(at: &Path, name: &str, target: &str, id_suffix: &str, icon: Option<&[u8]>, app: &str, inventory: &mut Inventory) -> std::io::Result<()> {
+    inventory.record(Artefact::Shortcut { path: at.to_string_lossy().into_owned(), app: app.to_string() })?;
     let contents = at.join("Contents");
     std::fs::create_dir_all(contents.join("MacOS"))?;
     std::fs::create_dir_all(contents.join("Resources"))?;
@@ -279,26 +284,32 @@ fn bundle(at: &Path, name: &str, target: &str, id_suffix: &str, icon: Option<&[u
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
 }
 
-pub fn create_shortcuts(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory, icon: impl Fn(&str) -> Option<Vec<u8>>) -> std::io::Result<()> {
-    let base = settings.url_of(app);
-    let base = base.trim_end_matches('/');
+pub fn create_shortcuts(
+    app: &App,
+    items: &[crate::shortcuts::Item],
+    lang: &str,
+    inventory: &mut Inventory,
+    icon: impl Fn(&str) -> Option<Vec<u8>>,
+) -> std::io::Result<()> {
+    // Applications > Kynoko (shared) > the app's folder (its own) > entries.
+    inventory.record(Artefact::Dir { path: kynoko_folder() })?;
     let folder = folder_of(app, lang);
-    inventory.record(Artefact::Dir { path: folder.to_string_lossy().into_owned() })?;
+    inventory.record(Artefact::Shortcut { path: folder.to_string_lossy().into_owned(), app: app.code.clone() })?;
     std::fs::create_dir_all(&folder)?;
-    let name = app.name(lang);
-    let app_icon = icon(&format!("{base}/manifest.webmanifest"));
-    bundle(&folder.join(format!("{}.app", crate::shortcuts::file_name(&name))), &name, &app.code, &app.code.to_lowercase(), app_icon.as_deref(), inventory)?;
-    for f in app.facades.iter().filter(|f| f.listed) {
-        let fname = f.names.get(lang).or_else(|| f.names.get("en")).cloned().unwrap_or_else(|| f.path.clone());
-        let slug = f.path.rsplit('/').next().unwrap_or(&f.path);
-        let fi = icon(&format!("{base}/assets/manifests/{slug}.webmanifest"));
-        let suffix = format!("{}.{}", app.code.to_lowercase(), slug.replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
+    for item in items {
+        let suffix = if item.slug.is_empty() {
+            app.code.to_lowercase()
+        } else {
+            format!("{}.{}", app.code.to_lowercase(), item.slug.replace(|c: char| !c.is_ascii_alphanumeric(), "-"))
+        };
+        let png = icon(&item.manifest);
         bundle(
-            &folder.join(format!("{}.app", crate::shortcuts::file_name(&fname))),
-            &fname,
-            &format!("{}/{}", app.code, f.path),
+            &folder.join(format!("{}.app", crate::shortcuts::file_name(&item.short))),
+            &item.short,
+            &item.target,
             &suffix,
-            fi.as_deref(),
+            png.as_deref(),
+            &app.code,
             inventory,
         )?;
     }

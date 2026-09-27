@@ -5,7 +5,8 @@ import { Lang, pickLang, t } from './i18n';
 interface Profile { id: string; name: string; default: boolean }
 interface Browser { id: string; name: string; engine: string; profiles: Profile[] }
 interface TypeGroup { facade: string; exts: { ext: string; on: boolean }[] }
-interface AppView { code: string; name: string; types: TypeGroup[]; associated: boolean; shortcuts: boolean; browser: string | null; profile: string | null }
+interface ShortcutItem { key: string; name: string; on: boolean }
+interface AppView { code: string; name: string; types: TypeGroup[]; associated: boolean; shortcuts: boolean; shortcutItems: ShortcutItem[]; browser: string | null; profile: string | null }
 interface State {
   apps: AppView[];
   browsers: Browser[];
@@ -117,6 +118,19 @@ function iconOf(code: string): HTMLElement {
   return img;
 }
 
+/** Which of the app's entries the menu gets: the app, and each facade. */
+function shortcutItemsOf(app: AppView): HTMLElement {
+  const chips = el('span', { class: 'chips' });
+  for (const item of app.shortcutItems) {
+    const tick = el('input', { type: 'checkbox', checked: item.on });
+    tick.addEventListener('change', () => void run(() => invoke('set_shortcut_item', { code: app.code, key: item.key, on: tick.checked, lang })));
+    chips.append(el('label', { class: item.key ? 'chip' : 'chip main' }, tick, item.name));
+  }
+  const label = t(lang, 'SHORTCUT_ITEMS');
+  return el('div', { class: 'types', role: 'group', ariaLabel: label },
+    el('div', { class: 'type-group' }, el('span', { class: 'facade' }, label), chips));
+}
+
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
     await action();
@@ -181,6 +195,7 @@ async function render(): Promise<void> {
           el('label', { class: 'switch' }, shortcuts, t(lang, state.os === 'macos' ? 'SHORTCUTS_MACOS' : state.os === 'linux' ? 'SHORTCUTS_LINUX' : 'SHORTCUTS_WINDOWS')),
         ),
         ...(opensFiles ? [typesOf(app)] : []),
+        ...(app.shortcuts && app.shortcutItems.length > 1 ? [shortcutItemsOf(app)] : []),
       ),
     );
   }

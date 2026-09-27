@@ -359,6 +359,8 @@ struct AppView {
     types: Vec<TypeGroup>,
     associated: bool,
     shortcuts: bool,
+    /// The app's menu entries (the app, then its listed facades), kept or not.
+    shortcut_items: Vec<ShortcutView>,
     browser: Option<String>,
     profile: Option<String>,
 }
@@ -381,6 +383,14 @@ struct StateView {
     os: String,
     /// The app to put forward, once.
     focus: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShortcutView {
+    key: String,
+    name: String,
+    on: bool,
 }
 
 #[derive(Serialize)]
@@ -433,6 +443,10 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
                 types: type_groups(a, &settings, &lang),
                 associated: settings.associated_apps.contains(&a.code),
                 shortcuts: settings.shortcut_apps.contains(&a.code),
+                shortcut_items: shortcuts::all_items(a, &settings, &lang)
+                    .into_iter()
+                    .map(|i| ShortcutView { on: settings.shortcut_chosen(&a.code, &i.key), key: i.key, name: i.short })
+                    .collect(),
                 browser: settings.app_browsers.get(&a.code).cloned(),
                 profile: settings.app_profiles.get(&a.code).cloned(),
             })
@@ -531,6 +545,33 @@ fn set_extension(shared: tauri::State<'_, Shared>, code: String, ext: Option<Str
         let mut inventory = Inventory::load();
         assoc::unregister(app, &mut inventory).map_err(|e| e.to_string())?;
         assoc::register(&settings.chosen(app), &settings, &mut inventory).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Keeps or takes out one menu entry of an app ("" = the app itself, else a
+/// facade path). An app with shortcuts gets them rebuilt at once.
+#[tauri::command]
+fn set_shortcut_item(shared: tauri::State<'_, Shared>, code: String, key: String, on: bool, lang: String) -> Result<(), String> {
+    let catalogue = shared.catalogue();
+    let app = catalogue.app(&code).ok_or("unknown app")?;
+    if !key.is_empty() && !app.facades.iter().any(|f| f.path == key) {
+        return Err("unknown facade".into());
+    }
+    let mut settings = Settings::load();
+    let excluded = settings.excluded_shortcuts.entry(code.clone()).or_default();
+    excluded.retain(|k| k != &key);
+    if !on {
+        excluded.push(key);
+    }
+    if settings.excluded_shortcuts.get(&code).is_some_and(|x| x.is_empty()) {
+        settings.excluded_shortcuts.remove(&code);
+    }
+    settings.save().map_err(|e| e.to_string())?;
+    if settings.shortcut_apps.contains(&code) {
+        let mut inventory = Inventory::load();
+        shortcuts::remove(app, &lang, &mut inventory).map_err(|e| e.to_string())?;
+        shortcuts::create(app, &settings, &lang, &mut inventory).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -794,6 +835,7 @@ pub fn run() {
             set_app_profile,
             set_associated,
             set_extension,
+            set_shortcut_item,
             app_icon,
             set_shortcuts,
             check_catalogue,
