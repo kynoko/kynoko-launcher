@@ -38,6 +38,11 @@ first time; the steps to proceed will be documented for each system. Every
 release publishes SHA-256 checksums, and is built by the public GitHub Actions
 workflows of this repository.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): this repository is public, and a few
+rules keep it safe.
+
 ## License
 
 [Apache License 2.0](LICENSE). The Kynoko name and logos are not covered by
