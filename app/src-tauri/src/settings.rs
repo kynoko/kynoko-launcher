@@ -138,6 +138,10 @@ impl Inventory {
     }
 }
 
+/// The window's own copies of the apps' icons: a cache, not something written
+/// to the system, so not in the inventory; cleanups remove the folder.
+pub const UI_ICONS: &str = "window-icons";
+
 /// Uninstalled with "delete the application data" left unticked: the
 /// system artefacts are gone (the cleanup took them), the user's choices stay
 /// for a reinstall, marked as not applied so that its first start applies them.
@@ -145,6 +149,7 @@ pub fn remove_state_keeping_preferences() {
     let _ = fs::remove_file(dir().join("inventory.json"));
     let _ = fs::remove_file(dir().join("catalogue.json"));
     let _ = fs::remove_dir(dir().join("icons"));
+    let _ = fs::remove_dir_all(dir().join(UI_ICONS));
     let mut settings = Settings::load();
     settings.registered_by = None;
     let _ = settings.save();
@@ -158,5 +163,6 @@ pub fn remove_own_state() {
     let _ = fs::remove_file(dir().join("catalogue.json"));
     // Emptied by the cleanup (every icon is in the inventory).
     let _ = fs::remove_dir(dir().join("icons"));
+    let _ = fs::remove_dir_all(dir().join(UI_ICONS));
     let _ = fs::remove_dir(dir());
 }

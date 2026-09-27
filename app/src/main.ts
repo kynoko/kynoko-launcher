@@ -89,6 +89,23 @@ function typesOf(app: AppView): HTMLElement {
   return box;
 }
 
+/** Icons already asked for, by app code: a re-render reuses them. */
+const icons = new Map<string, Promise<string | null>>();
+
+/** The app's icon, filled in when it arrives (never blocks the window). */
+function iconOf(code: string): HTMLElement {
+  const img = el('img', { class: 'app-icon', alt: '', width: 28, height: 28 });
+  img.hidden = true;
+  if (!icons.has(code)) icons.set(code, invoke<string | null>('app_icon', { code }).catch(() => null));
+  void icons.get(code)!.then((src) => {
+    if (src) {
+      img.src = src;
+      img.hidden = false;
+    }
+  });
+  return img;
+}
+
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
     await action();
@@ -129,7 +146,7 @@ async function render(): Promise<void> {
     open.addEventListener('click', () => void run(() => invoke('launch', { target: app.code })));
     appsCard.append(
       el('div', { class: app.code === state.focus ? 'row focus' : 'row', id: 'app-' + app.code },
-        el('span', { class: 'name' }, app.name),
+        el('span', { class: 'name' }, iconOf(app.code), app.name),
         el('span', { class: 'controls' },
           browserSelect(state, app.browser, t(lang, 'FOLLOW_DEFAULT'), t(lang, 'BROWSER_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_browser', { code: app.code, id }))),

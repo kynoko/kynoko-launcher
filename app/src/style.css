@@ -38,7 +38,8 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
   background: rgba(var(--kynoko-glow-rgb), 0.1);
   outline: 1px solid rgba(var(--kynoko-glow-rgb), 0.45);
 }
-.row .name { font-weight: 650; }
+.row .name { font-weight: 650; display: inline-flex; align-items: center; gap: 10px; }
+.app-icon { inline-size: 28px; block-size: 28px; border-radius: 7px; flex: none; }
 /* The app's file types, by facade: one tick per type. */
 .row .types { grid-column: 1 / -1; display: grid; gap: 6px; font-size: 0.82rem; }
 .row .types.idle { opacity: 0.6; }

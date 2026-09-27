@@ -556,6 +556,55 @@ fn watch_catalogue(app: AppHandle) {
     });
 }
 
+/// An app's icon for the window, as a data: URL (the window's CSP loads
+/// nothing remote). From the app's web manifest, kept a week on disk.
+#[tauri::command]
+async fn app_icon(shared: tauri::State<'_, Shared>, code: String) -> Result<Option<String>, String> {
+    if !plain_code(&code) {
+        return Ok(None);
+    }
+    let catalogue = shared.catalogue();
+    let Some(app) = catalogue.app(&code) else { return Ok(None) };
+    let manifest = format!("{}/manifest.webmanifest", Settings::load().url_of(app).trim_end_matches('/'));
+    let path = settings::dir().join(settings::UI_ICONS).join(format!("{code}.png"));
+    let png = tauri::async_runtime::spawn_blocking(move || {
+        let fresh = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < Duration::from_secs(7 * 24 * 3600)));
+        if fresh {
+            if let Ok(bytes) = std::fs::read(&path) {
+                return Some(bytes);
+            }
+        }
+        match shortcuts::fetch_icon(&manifest) {
+            Ok(bytes) => {
+                let _ = std::fs::create_dir_all(path.parent().expect("has a parent"));
+                let _ = std::fs::write(&path, &bytes);
+                Some(bytes)
+            }
+            // Offline: last week's copy is better than none.
+            Err(_) => std::fs::read(&path).ok(),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(png.filter(|b| b.starts_with(b"\x89PNG")).map(|b| format!("data:image/png;base64,{}", base64(&b))))
+}
+
+/// Standard base64, for a data: URL (one small image, no crate needed).
+fn base64(bytes: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = (u32::from(chunk[0]) << 16) | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8) | u32::from(*chunk.get(2).unwrap_or(&0));
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
 #[tauri::command]
 fn launch(shared: tauri::State<'_, Shared>, target: String) -> Result<(), String> {
     launch_app(&shared, &target)
@@ -623,6 +672,7 @@ pub fn run() {
             set_app_profile,
             set_associated,
             set_extension,
+            app_icon,
             set_shortcuts,
             check_catalogue,
             launch,
@@ -698,6 +748,16 @@ mod tests {
         assert_eq!(app_param("kynoko-launcher://settings?app=../../evil"), None);
         assert_eq!(app_param("kynoko-launcher://settings"), None);
         assert!(matches!(parse(&["kynoko-launcher://settings?app=Office".into()]), Command::Window(Some(_))));
+    }
+
+    #[test]
+    fn base64_encoding() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+        assert_eq!(base64(&[0xff, 0xfe]), "//4=");
     }
 
     #[test]

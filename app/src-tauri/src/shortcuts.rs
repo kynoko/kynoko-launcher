@@ -44,7 +44,7 @@ fn resolve(manifest_url: &str, src: &str) -> String {
 }
 
 /// The largest PNG "any" icon a web manifest declares, downloaded.
-fn fetch_icon(manifest_url: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn fetch_icon(manifest_url: &str) -> Result<Vec<u8>, String> {
     let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(10)).build();
     let manifest: serde_json::Value = agent
         .get(manifest_url)
