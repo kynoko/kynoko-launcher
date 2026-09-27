@@ -11,6 +11,8 @@ pub enum Engine {
     Gecko,
     Webkit,
     Unknown,
+    /// Not a browser: the launcher's own window (see lib.rs, open_embedded).
+    Embedded,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,8 +51,12 @@ pub fn engine_of(exe: &str) -> Engine {
         stem = stem.strip_suffix(suffix).unwrap_or(stem);
     }
     match stem {
-        "chrome" | "google-chrome" | "msedge" | "microsoft-edge" | "edge" | "brave" | "brave-browser" | "opera"
-        | "launcher" | "vivaldi" | "chromium" | "chromium-browser" | "thorium" | "yandex" | "yandex-browser" => Engine::Chromium,
+        "chrome" | "google-chrome" | "msedge" | "microsoft-edge" | "edge" | "brave" | "brave-browser" | "vivaldi" | "chromium"
+        | "chromium-browser" | "thorium" | "yandex" | "yandex-browser" => Engine::Chromium,
+        // Opera is Chromium, but whether it honours --app is unverified: an
+        // app switch it ignored would open a blank window. A plain window,
+        // which opens the page, until someone has checked.
+        "opera" | "launcher" => Engine::Unknown,
         "firefox" | "librewolf" | "waterfox" | "zen" | "zen-browser" | "floorp" | "mullvadbrowser" | "icecat" => Engine::Gecko,
         "safari" | "epiphany" => Engine::Webkit,
         _ => Engine::Unknown,
@@ -95,6 +101,21 @@ pub fn installed() -> Vec<Browser> {
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out
+}
+
+/// The launcher's own window, offered with the browsers: an app window on
+/// every system, whatever browser is installed.
+pub const EMBEDDED: &str = "kynoko-window";
+
+pub fn embedded() -> Browser {
+    Browser {
+        id: EMBEDDED.to_string(),
+        name: "Kynoko Launcher".to_string(),
+        exe: String::new(),
+        engine: Engine::Embedded,
+        profiles: Vec::new(),
+        command: Vec::new(),
+    }
 }
 
 /// The browser Windows opens web links with, when it is one of `installed`:

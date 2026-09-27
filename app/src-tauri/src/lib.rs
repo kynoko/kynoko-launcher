@@ -98,6 +98,8 @@ struct Shared {
     last_manual_check: Mutex<Option<Instant>>,
     bridge: Mutex<Option<Bridge>>,
     handoff: Mutex<Option<Handoff>>,
+    /// Set at start: what the launcher's own app windows are opened with.
+    handle: std::sync::OnceLock<AppHandle>,
     last_open: Mutex<Option<Instant>>,
     /// The app the window should put forward (from a `settings?app=` link).
     focus: Mutex<Option<String>>,
@@ -147,6 +149,9 @@ fn origin_of(url: &str) -> String {
 
 fn browser_by_id(id: Option<String>) -> Option<browsers::Browser> {
     let id = id?;
+    if id == browsers::EMBEDDED {
+        return Some(browsers::embedded());
+    }
     browsers::installed().into_iter().find(|b| b.id == id)
 }
 
@@ -229,6 +234,9 @@ fn open_page(
     url: &str,
     with_file: bool,
 ) -> Result<(), String> {
+    if browser.as_ref().is_some_and(|b| b.engine == browsers::Engine::Embedded) {
+        return open_embedded(shared, url);
+    }
     let b = match browser {
         Some(b) if cfg!(windows) && b.engine == browsers::Engine::Gecko => b,
         other => return launch::open(url, other.as_ref(), profile.as_deref()).map_err(|e| e.to_string()),
@@ -257,6 +265,42 @@ fn cleanup(keep_preferences: bool) -> Result<(), String> {
     } else {
         settings::remove_own_state();
     }
+    Ok(())
+}
+
+/// An app page in the launcher's own window: an app window on every system
+/// (the system's web engine: WebView2, WKWebView, WebKitGTK), whatever
+/// browser is installed. The page is a remote site: these windows are given
+/// no capability (capabilities/default.json names "main" only), so it can
+/// never call the launcher. Its session is its own, kept in the launcher's
+/// data folder (signed in once).
+fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(1);
+    let handle = shared.handle.get().ok_or("not started")?.clone();
+    let target = url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+    let label = format!("app-{}", NEXT.fetch_add(1, Ordering::SeqCst));
+    // A window without an address bar stays on Kynoko (and its payment
+    // pages, whose return must land in this same session): any other
+    // address goes to the system's browser.
+    thread::spawn(move || {
+        let built = tauri::WebviewWindowBuilder::new(&handle, &label, tauri::WebviewUrl::External(target))
+            .title("Kynoko")
+            .inner_size(1280.0, 840.0)
+            .on_navigation(|u| {
+                let within = |d: &str, h: &str| h == d || h.ends_with(&format!(".{d}"));
+                let kynoko = u.scheme() == "https"
+                    && u.host_str().is_some_and(|h| within("kynoko.com", h) || within("stripe.com", h));
+                if !kynoko && u.scheme() != "about" {
+                    let _ = launch::open(u.as_str(), None, None);
+                }
+                kynoko || u.scheme() == "about"
+            })
+            .build();
+        if let Err(e) = built {
+            eprintln!("kynoko-launcher: cannot open an app window: {e}");
+        }
+    });
     Ok(())
 }
 
@@ -293,7 +337,8 @@ fn watch_idle(app: AppHandle) {
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
         let shared = app.state::<Shared>();
-        let window_shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false);
+        let window_shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false)
+            || app.webview_windows().keys().any(|l| l.starts_with("app-"));
         let live = shared.bridge.lock().expect("bridge lock").as_ref().map(|b| b.live()).unwrap_or(0);
         let waiting = shared.last_open.lock().expect("lock").map(|t| t.elapsed() < FIRST_CONTACT).unwrap_or(false);
         if !window_shown && live == 0 && !waiting {
@@ -392,7 +437,7 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
                 profile: settings.app_profiles.get(&a.code).cloned(),
             })
             .collect(),
-        browsers: browsers::installed(),
+        browsers: std::iter::once(browsers::embedded()).chain(browsers::installed()).collect(),
         default_browser: settings.default_browser.clone(),
         default_profile: settings.default_profile.clone(),
         version: app.package_info().version.to_string(),
@@ -736,6 +781,7 @@ pub fn run() {
             last_manual_check: Mutex::new(None),
             bridge: Mutex::new(None),
             handoff: Mutex::new(None),
+            handle: std::sync::OnceLock::new(),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
             opened_by_event: std::sync::atomic::AtomicBool::new(false),
@@ -757,7 +803,8 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            if !cleaning {
+            let _ = handle.state::<Shared>().handle.set(handle.clone());
+            if !cleaning && !settings::isolated() {
                 if let Err(e) = assoc::register_scheme(&mut Inventory::load()) {
                     eprintln!("kynoko-launcher: cannot register {}://: {e}", assoc::SCHEME);
                 }

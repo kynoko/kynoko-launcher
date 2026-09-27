@@ -56,7 +56,7 @@ fn args_for(engine: &Engine, url: &str, profile: Option<&str>) -> Vec<String> {
             }
             args.extend(["-new-window".to_string(), url.to_string()]);
         }
-        Engine::Webkit | Engine::Unknown => args.push(url.to_string()),
+        Engine::Webkit | Engine::Unknown | Engine::Embedded => args.push(url.to_string()),
     }
     args
 }

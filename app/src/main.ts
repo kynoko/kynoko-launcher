@@ -42,10 +42,16 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** The launcher's own window is not a browser: it is named, in the user's language. */
+const EMBEDDED = 'kynoko-window';
+function labelOf(b: Browser): string {
+  return b.id === EMBEDDED ? t(lang, 'EMBEDDED') : b.name;
+}
+
 function browserSelect(state: State, value: string | null, first: string, label: string, onChange: (id: string | null) => void) {
   const select = el('select', { ariaLabel: label });
   select.append(el('option', { value: '' }, first));
-  for (const b of state.browsers) select.append(el('option', { value: b.id, selected: b.id === value }, b.name));
+  for (const b of state.browsers) select.append(el('option', { value: b.id, selected: b.id === value }, labelOf(b)));
   select.addEventListener('change', () => onChange(select.value || null));
   return select;
 }
@@ -132,7 +138,10 @@ async function render(): Promise<void> {
         (id) => void run(() => invoke('set_default_profile', { id })))].filter((x): x is HTMLSelectElement => !!x),
     ),
   );
-  if (!state.browsers.length) browserCard.append(el('p', { class: 'note' }, t(lang, 'NO_BROWSERS')));
+  if (state.browsers.length < 2) browserCard.append(el('p', { class: 'note' }, t(lang, 'NO_BROWSERS')));
+  if (state.defaultBrowser === EMBEDDED || state.apps.some((a) => a.browser === EMBEDDED)) {
+    browserCard.append(el('p', { class: 'note' }, t(lang, 'EMBEDDED_HINT')));
+  }
   root.append(browserCard);
 
   root.append(el('h2', {}, t(lang, 'APPS_TITLE')));

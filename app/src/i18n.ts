@@ -5,7 +5,7 @@
 export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
-  | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
+  | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT'
   | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUTS_WINDOWS' | 'SHORTCUTS_MACOS' | 'SHORTCUTS_LINUX' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
@@ -20,6 +20,8 @@ const FR: Dict = {
   SYSTEM_DEFAULT: 'Celui du système',
   FOLLOW_DEFAULT: 'Navigateur par défaut',
   NO_BROWSERS: 'Aucun navigateur trouvé : celui du système sera utilisé.',
+  EMBEDDED: "Fenêtre Kynoko Launcher (mode application)",
+  EMBEDDED_HINT: "Fenêtre Kynoko Launcher : les apps et vos fichiers s'ouvrent en mode application sur tous les systèmes. Sa connexion à Kynoko est la sienne : connectez-vous-y une fois.",
   APPS_TITLE: 'Applications',
   OPEN_FILES: "Ouvrir ces fichiers d'un double-clic",
   TYPES_FOR: "Types de fichiers de {{app}}",
@@ -51,6 +53,8 @@ const EN: Dict = {
   SYSTEM_DEFAULT: "The system's",
   FOLLOW_DEFAULT: 'Default browser',
   NO_BROWSERS: "No browser found: the system's will be used.",
+  EMBEDDED: "Kynoko Launcher window (app mode)",
+  EMBEDDED_HINT: "Kynoko Launcher window: apps and your files open in app mode on every system. It has its own Kynoko sign-in: sign in there once.",
   APPS_TITLE: 'Apps',
   OPEN_FILES: "Open these files with a double-click",
   TYPES_FOR: "File types of {{app}}",
@@ -82,6 +86,8 @@ const ES: Dict = {
   SYSTEM_DEFAULT: 'El del sistema',
   FOLLOW_DEFAULT: 'Navegador predeterminado',
   NO_BROWSERS: 'No se ha encontrado ningún navegador: se usará el del sistema.',
+  EMBEDDED: "Ventana de Kynoko Launcher (modo aplicación)",
+  EMBEDDED_HINT: "Ventana de Kynoko Launcher: las apps y sus archivos se abren en modo aplicación en todos los sistemas. Tiene su propia sesión de Kynoko: inicie sesión en ella una vez.",
   APPS_TITLE: 'Aplicaciones',
   OPEN_FILES: "Abrir estos archivos con doble clic",
   TYPES_FOR: "Tipos de archivo de {{app}}",
@@ -113,6 +119,8 @@ const JA: Dict = {
   SYSTEM_DEFAULT: 'システムの既定',
   FOLLOW_DEFAULT: '既定のブラウザー',
   NO_BROWSERS: 'ブラウザーが見つかりません。システムの既定を使います。',
+  EMBEDDED: "Kynoko Launcher のウィンドウ（アプリモード）",
+  EMBEDDED_HINT: "Kynoko Launcher のウィンドウ：どのシステムでも、アプリとファイルがアプリモードで開きます。Kynoko へのログインはこのウィンドウ専用です。一度ログインしてください。",
   APPS_TITLE: 'アプリ',
   OPEN_FILES: "これらのファイルをダブルクリックで開く",
   TYPES_FOR: "{{app}} のファイルの種類",
@@ -144,6 +152,8 @@ const ZH_HANS: Dict = {
   SYSTEM_DEFAULT: '系统默认',
   FOLLOW_DEFAULT: '默认浏览器',
   NO_BROWSERS: '未找到浏览器：将使用系统默认浏览器。',
+  EMBEDDED: "Kynoko Launcher 窗口（应用模式）",
+  EMBEDDED_HINT: "Kynoko Launcher 窗口：在所有系统上，应用和文件都以应用模式打开。它有自己的 Kynoko 登录状态：请在其中登录一次。",
   APPS_TITLE: '应用',
   OPEN_FILES: "双击即可打开这些文件",
   TYPES_FOR: "{{app}} 的文件类型",
@@ -175,6 +185,8 @@ const ZH_HANT: Dict = {
   SYSTEM_DEFAULT: '系統預設',
   FOLLOW_DEFAULT: '預設瀏覽器',
   NO_BROWSERS: '找不到瀏覽器：將使用系統預設瀏覽器。',
+  EMBEDDED: "Kynoko Launcher 視窗（應用程式模式）",
+  EMBEDDED_HINT: "Kynoko Launcher 視窗：在所有系統上，應用程式和檔案都以應用程式模式開啟。它有自己的 Kynoko 登入狀態：請在其中登入一次。",
   APPS_TITLE: '應用程式',
   OPEN_FILES: "按兩下即可開啟這些檔案",
   TYPES_FOR: "{{app}} 的檔案類型",
@@ -206,6 +218,8 @@ const AR: Dict = {
   SYSTEM_DEFAULT: 'متصفح النظام',
   FOLLOW_DEFAULT: 'المتصفح الافتراضي',
   NO_BROWSERS: 'لم يُعثر على أي متصفح: سيُستخدم متصفح النظام.',
+  EMBEDDED: "نافذة Kynoko Launcher (وضع التطبيق)",
+  EMBEDDED_HINT: "نافذة Kynoko Launcher: تُفتح التطبيقات وملفاتك في وضع التطبيق على كل الأنظمة. لها تسجيل دخول خاص بها إلى Kynoko: سجّل الدخول فيها مرة واحدة.",
   APPS_TITLE: 'التطبيقات',
   OPEN_FILES: "فتح هذه الملفات بنقرة مزدوجة",
   TYPES_FOR: "أنواع ملفات {{app}}",

@@ -27,6 +27,10 @@
         <array><string>mp4</string><string>mov</string><string>mkv</string><string>webm</string><string>avi</string><string>m4v</string><string>ts</string><string>flv</string><string>wmv</string><string>3gp</string><string>ogv</string><string>mxf</string><string>mp3</string><string>wav</string><string>flac</string><string>ogg</string><string>m4a</string><string>aac</string><string>opus</string></array>
       </dict>
     </array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsLocalNetworking</key><true/>
+    </dict>
     <key>CFBundleURLTypes</key>
     <array>
       <dict>

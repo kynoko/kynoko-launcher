@@ -45,6 +45,10 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
     <array>
 ${types}
     </array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsLocalNetworking</key><true/>
+    </dict>
     <key>CFBundleURLTypes</key>
     <array>
       <dict>

@@ -76,7 +76,20 @@ pub struct Inventory {
 }
 
 pub fn dir() -> PathBuf {
+    if let Some(home) = std::env::var_os(HOME_VAR) {
+        return PathBuf::from(home);
+    }
     dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Kynoko Launcher")
+}
+
+/// End-to-end tests run the launcher ISOLATED: its state in this folder, and
+/// nothing registered system-wide at start (the kynoko-launcher:// address
+/// stays the installed launcher's), so a test on a machine where Kynoko
+/// Launcher is installed leaves that installation alone.
+const HOME_VAR: &str = "KYNOKO_LAUNCHER_HOME";
+
+pub fn isolated() -> bool {
+    std::env::var_os(HOME_VAR).is_some()
 }
 
 fn read<T: for<'de> Deserialize<'de> + Default>(name: &str) -> T {
