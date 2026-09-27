@@ -33,6 +33,15 @@ pub struct Settings {
     pub catalogue_url: Option<String>,
     /// The window's last language: shortcuts are named in it.
     pub ui_lang: Option<String>,
+    /// The gateway page Firefox's app windows start at (see handoff.rs);
+    /// None = https://launch.kynoko.com/. For testing against another
+    /// environment.
+    pub gateway_url: Option<String>,
+    /// `<browser>|<profile>|<origin>`: that origin has reached the launcher
+    /// from that browser profile, so the browser's permission is granted.
+    /// Until then Firefox gets an ordinary window, where its permission
+    /// prompt is sure to show (see lib.rs, open_page).
+    pub loopback_ok: Vec<String>,
     /// The launcher version that last wrote the associations: a new version
     /// writes them again (names, icons and commands may have changed).
     pub registered_by: Option<String>,
@@ -94,6 +103,10 @@ impl Settings {
     /// The address `app` is opened at: its own, or the one settings point it to.
     pub fn url_of(&self, app: &crate::catalogue::App) -> String {
         self.app_urls.get(&app.code).cloned().unwrap_or_else(|| app.url.clone())
+    }
+
+    pub fn gateway(&self) -> String {
+        self.gateway_url.clone().unwrap_or_else(|| "https://launch.kynoko.com/".to_string())
     }
 
     /// Whether files of type `ext` go to `app` (when the app is associated).

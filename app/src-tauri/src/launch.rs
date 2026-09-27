@@ -20,6 +20,25 @@ pub fn open(url: &str, browser: Option<&Browser>, profile: Option<&str>) -> io::
     }
 }
 
+/// Firefox on Windows: `gateway` in a Taskbar Tab window (see handoff.rs).
+/// Any id does: an unknown one makes Firefox find the Taskbar Tab of that
+/// site, or create it. An older Firefox ignores the flag and opens a window.
+pub fn open_taskbar_tab(gateway: &str, b: &Browser, profile: Option<&str>) -> io::Result<()> {
+    let profile = profile.filter(|p| b.profiles.iter().any(|x| x.id == *p));
+    let (program, fixed) = b.command.split_first().map(|(p, f)| (p.clone(), f.to_vec())).unwrap_or((b.exe.clone(), Vec::new()));
+    Command::new(program).args(fixed).args(taskbar_args(gateway, profile)).spawn().map(|_| ())
+}
+
+fn taskbar_args(gateway: &str, profile: Option<&str>) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(p) = profile {
+        args.extend(["-P".to_string(), p.to_string()]);
+    }
+    // -container 0: the default container, where the user's sessions are.
+    args.extend(["-taskbar-tab", "kynoko-launcher", "-new-window", gateway, "-container", "0"].map(String::from));
+    args
+}
+
 /// The browser's arguments for opening `url` in `profile`.
 fn args_for(engine: &Engine, url: &str, profile: Option<&str>) -> Vec<String> {
     let mut args = Vec::new();
@@ -53,6 +72,10 @@ mod tests {
         assert_eq!(args_for(&Engine::Chromium, u, None), ["--app=https://a.example/open#x=1"]);
         assert_eq!(args_for(&Engine::Gecko, u, Some("default-nightly")), ["-P", "default-nightly", "-new-window", u]);
         assert_eq!(args_for(&Engine::Unknown, u, Some("x")), [u]);
+        assert_eq!(
+            taskbar_args("https://launch.example/", Some("default-release")),
+            ["-P", "default-release", "-taskbar-tab", "kynoko-launcher", "-new-window", "https://launch.example/", "-container", "0"]
+        );
     }
 }
 

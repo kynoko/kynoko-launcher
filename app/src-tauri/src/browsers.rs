@@ -97,6 +97,31 @@ pub fn installed() -> Vec<Browser> {
     out
 }
 
+/// The browser Windows opens web links with, when it is one of `installed`:
+/// "the system's browser" then gets the same treatment as a chosen one (an
+/// app window for Chromium, a Taskbar Tab for Firefox).
+#[cfg(windows)]
+pub fn system_default() -> Option<Browser> {
+    use winreg::enums::{HKEY_CLASSES_ROOT, HKEY_CURRENT_USER};
+    use winreg::RegKey;
+    let choice = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https";
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let prog_id: String = ["UserChoiceLatest", "UserChoice"]
+        .iter()
+        .find_map(|k| hkcu.open_subkey(format!(r"{choice}\{k}")).and_then(|key| key.get_value("ProgId")).ok())?;
+    let command: String = RegKey::predef(HKEY_CLASSES_ROOT)
+        .open_subkey(format!(r"{prog_id}\shell\open\command"))
+        .and_then(|k| k.get_value(""))
+        .ok()?;
+    let exe = executable_of(&command);
+    installed().into_iter().find(|b| b.exe.eq_ignore_ascii_case(&exe))
+}
+
+#[cfg(not(windows))]
+pub fn system_default() -> Option<Browser> {
+    None
+}
+
 #[cfg(target_os = "linux")]
 pub fn installed() -> Vec<Browser> {
     crate::linux::browsers()

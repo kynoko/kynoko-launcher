@@ -20,24 +20,28 @@ struct Session {
     path: PathBuf,
     origin: String,
     last_seen: Instant,
+    /// Told to `on_reached` at the page's first authorized request: proof
+    /// that its browser lets that origin reach the launcher.
+    key: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct Bridge {
     pub port: u16,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
+    on_reached: fn(String),
 }
 
 impl Bridge {
     /// Binds 127.0.0.1 on a random port and serves in a background thread.
-    pub fn start() -> io::Result<Bridge> {
+    pub fn start(on_reached: fn(String)) -> io::Result<Bridge> {
         let server = Server::http("127.0.0.1:0").map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         let port = server
             .server_addr()
             .to_ip()
             .map(|a| a.port())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no ip listener"))?;
-        let bridge = Bridge { port, sessions: Arc::new(Mutex::new(HashMap::new())) };
+        let bridge = Bridge { port, sessions: Arc::new(Mutex::new(HashMap::new())), on_reached };
         let serving = bridge.clone();
         thread::spawn(move || {
             for request in server.incoming_requests() {
@@ -48,12 +52,12 @@ impl Bridge {
     }
 
     /// Opens a session on `path` for pages of `origin`; returns its token.
-    pub fn open(&self, path: PathBuf, origin: String) -> String {
+    pub fn open(&self, path: PathBuf, origin: String, key: Option<String>) -> String {
         let token = random_token();
         self.sessions
             .lock()
             .expect("sessions lock")
-            .insert(token.clone(), Session { path, origin, last_seen: Instant::now() });
+            .insert(token.clone(), Session { path, origin, last_seen: Instant::now(), key });
         token
     }
 
@@ -93,8 +97,12 @@ impl Bridge {
             let _ = req.respond(Response::from_string("forbidden origin").with_status_code(403));
             return;
         }
-        if let Some(s) = self.sessions.lock().expect("sessions lock").get_mut(&token) {
+        let reached = self.sessions.lock().expect("sessions lock").get_mut(&token).and_then(|s| {
             s.last_seen = Instant::now();
+            s.key.take()
+        });
+        if let Some(key) = reached {
+            (self.on_reached)(key);
         }
 
         if *req.method() == Method::Options {

@@ -17,6 +17,7 @@ mod assoc;
 mod bridge;
 mod browsers;
 mod catalogue;
+mod handoff;
 mod launch;
 #[cfg(target_os = "linux")]
 mod linux;
@@ -35,6 +36,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::Bridge;
+use handoff::Handoff;
 use catalogue::{Cache, Catalogue, Refresh};
 use settings::{Inventory, Settings};
 
@@ -95,6 +97,7 @@ struct Shared {
     /// Last manual "check now" (checks are limited to one a minute).
     last_manual_check: Mutex<Option<Instant>>,
     bridge: Mutex<Option<Bridge>>,
+    handoff: Mutex<Option<Handoff>>,
     last_open: Mutex<Option<Instant>>,
     /// The app the window should put forward (from a `settings?app=` link).
     focus: Mutex<Option<String>>,
@@ -112,7 +115,19 @@ impl Shared {
     fn bridge(&self) -> Result<Bridge, String> {
         let mut slot = self.bridge.lock().expect("bridge lock");
         if slot.is_none() {
-            *slot = Some(Bridge::start().map_err(|e| e.to_string())?);
+            *slot = Some(Bridge::start(remember_reached).map_err(|e| e.to_string())?);
+        }
+        Ok(slot.clone().expect("started"))
+    }
+
+    /// The hand-off listener for the gateway at `origin` (started once).
+    fn handoff(&self, origin: &str) -> Result<Handoff, String> {
+        let mut slot = self.handoff.lock().expect("hand-off lock");
+        if slot.as_ref().is_some_and(|h| h.origin() != origin) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            *slot = Some(Handoff::start(origin.to_string(), remember_reached).map_err(|e| e.to_string())?);
         }
         Ok(slot.clone().expect("started"))
     }
@@ -153,11 +168,12 @@ fn open_files(shared: &Shared, named: Option<&str>, files: &[PathBuf]) -> Result
             .or_else(|| catalogue.app_for_ext(&ext, &every))
             .ok_or_else(|| format!("no Kynoko app opens .{ext}"))?;
         let base = app_url(&settings, app);
-        let token = bridge.open(path.clone(), origin_of(&base));
+        let origin = origin_of(&base);
+        let (browser, profile) = browser_for(&settings, &app.code);
+        let key = browser.as_ref().map(|b| reach_key(b, profile.as_deref(), &origin));
+        let token = bridge.open(path.clone(), origin, key);
         let url = format!("{}/open#kynokoBridge=127.0.0.1:{}/{}&{MARKER}", base.trim_end_matches('/'), bridge.port, token);
-        let profile = settings.profile_for(&app.code);
-        launch::open(&url, browser_by_id(settings.browser_for(&app.code)).as_ref(), profile.as_deref())
-            .map_err(|e| e.to_string())?;
+        open_page(shared, &settings, browser, profile, &url, true)?;
     }
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
     Ok(())
@@ -170,8 +186,67 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let app = catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
     let settings = Settings::load();
     let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
-    let profile = settings.profile_for(code);
-    launch::open(&url, browser_by_id(settings.browser_for(code)).as_ref(), profile.as_deref()).map_err(|e| e.to_string())
+    let (browser, profile) = browser_for(&settings, code);
+    open_page(shared, &settings, browser, profile, &url, false)
+}
+
+/// The browser and profile `code` opens in: the one chosen for it, else the
+/// default one, else the system's.
+fn browser_for(settings: &Settings, code: &str) -> (Option<browsers::Browser>, Option<String>) {
+    let browser = browser_by_id(settings.browser_for(code)).or_else(browsers::system_default);
+    (browser, settings.profile_for(code))
+}
+
+/// See Settings::loopback_ok.
+fn reach_key(b: &browsers::Browser, profile: Option<&str>, origin: &str) -> String {
+    format!("{}|{}|{origin}", b.id, profile.unwrap_or("-"))
+}
+
+/// Proof arrived (from the bridge or the hand-off) that a browser profile
+/// lets an origin reach the launcher: kept, so that Firefox's app window can
+/// be used from now on.
+fn remember_reached(key: String) {
+    let mut settings = Settings::load();
+    if !settings.loopback_ok.contains(&key) {
+        settings.loopback_ok.push(key);
+        let _ = settings.save();
+    }
+}
+
+/// Opens an app page. Chromium: an app window (`--app`). Firefox on
+/// Windows: a Taskbar Tab window through the gateway (handoff.rs), which is
+/// how a facade and a file survive Firefox starting that window at the
+/// site's root. But a Taskbar Tab has no address bar for Firefox's
+/// permission prompt to hang from, so as long as this browser profile has
+/// not been seen reaching the launcher (the gateway, and for a file the app
+/// too), the gateway opens in an ordinary window, where the prompt is sure
+/// to show; the next time is an app window.
+fn open_page(
+    shared: &Shared,
+    settings: &Settings,
+    browser: Option<browsers::Browser>,
+    profile: Option<String>,
+    url: &str,
+    with_file: bool,
+) -> Result<(), String> {
+    let b = match browser {
+        Some(b) if cfg!(windows) && b.engine == browsers::Engine::Gecko => b,
+        other => return launch::open(url, other.as_ref(), profile.as_deref()).map_err(|e| e.to_string()),
+    };
+    let gateway = settings.gateway();
+    let gateway_key = reach_key(&b, profile.as_deref(), &origin_of(&gateway));
+    let app_key = reach_key(&b, profile.as_deref(), &origin_of(url));
+    let handoff = shared.handoff(&origin_of(&gateway))?;
+    handoff.push(url.to_string(), gateway_key.clone());
+    // The launcher stays up until the gateway has asked.
+    *shared.last_open.lock().expect("lock") = Some(Instant::now());
+    let proven = settings.loopback_ok.contains(&gateway_key) && (!with_file || settings.loopback_ok.contains(&app_key));
+    if proven {
+        launch::open_taskbar_tab(&gateway, &b, profile.as_deref())
+    } else {
+        launch::open(&gateway, Some(&b), profile.as_deref())
+    }
+    .map_err(|e| e.to_string())
 }
 
 fn cleanup(keep_preferences: bool) -> Result<(), String> {
@@ -660,6 +735,7 @@ pub fn run() {
             catalogue: RwLock::new(Cache::load().catalogue()),
             last_manual_check: Mutex::new(None),
             bridge: Mutex::new(None),
+            handoff: Mutex::new(None),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
             opened_by_event: std::sync::atomic::AtomicBool::new(false),
