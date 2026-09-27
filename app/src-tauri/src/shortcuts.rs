@@ -10,7 +10,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use crate::catalogue::App;
+use crate::catalogue::{App, Facade};
 use crate::settings::{self, Artefact, Inventory, Settings};
 
 /// Where downloaded icons live (removed with the rest by the cleanup).
@@ -118,6 +118,50 @@ fn icon_file(manifest_url: &str, name: &str, inventory: &mut Inventory) -> Optio
     std::fs::create_dir_all(icons_dir()).ok()?;
     std::fs::write(&path, ico).ok()?;
     Some(path)
+}
+
+/// A facade's web manifest.
+fn facade_manifest(base: &str, facade: &Facade) -> String {
+    format!("{}/assets/manifests/{}.webmanifest", base.trim_end_matches('/'), facade.slug())
+}
+
+/// The icon files of `app`'s types wear: its facades', named apart from the
+/// shortcuts' (`assoc-<app>-<facade>`) so that removing the shortcuts never
+/// takes them away. Kept once downloaded: turning one type off and on again
+/// does not fetch anything.
+fn type_icon_path(app: &App, facade: &Facade, format: &str) -> PathBuf {
+    icons_dir().join(format!("assoc-{}-{}.{format}", app.code, facade.slug()))
+}
+
+/// The icon (`ico` or `png`) of the files `facade` opens; None when it
+/// cannot be had, and the type then wears the launcher's own.
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+pub(crate) fn type_icon(app: &App, facade: &Facade, settings: &Settings, format: &str, inventory: &mut Inventory) -> Option<PathBuf> {
+    let path = type_icon_path(app, facade, format);
+    let recorded = Artefact::File { path: path.to_string_lossy().into_owned() };
+    if path.is_file() && inventory.artefacts.contains(&recorded) {
+        return Some(path);
+    }
+    let png = fetch_icon(&facade_manifest(&settings.url_of(app), facade)).ok()?;
+    let bytes = if format == "ico" { png_to_ico(&png).ok()? } else { png };
+    inventory.record(recorded).ok()?;
+    std::fs::create_dir_all(icons_dir()).ok()?;
+    std::fs::write(&path, bytes).ok()?;
+    Some(path)
+}
+
+/// Removes the icons of `app`'s file types (its associations are gone).
+pub(crate) fn remove_type_icons(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
+    let prefix = icons_dir().join(format!("assoc-{}-", app.code)).to_string_lossy().into_owned();
+    for a in inventory.artefacts.clone() {
+        if let Artefact::File { path } = &a {
+            if path.starts_with(&prefix) {
+                let _ = std::fs::remove_file(path);
+                inventory.forget(&a)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(windows)]

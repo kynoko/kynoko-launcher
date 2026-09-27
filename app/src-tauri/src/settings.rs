@@ -22,6 +22,10 @@ pub struct Settings {
     pub app_profiles: HashMap<String, String>,
     /// Apps whose file types are associated with Kynoko Launcher.
     pub associated_apps: Vec<String>,
+    /// File types the user took OUT of an app's associations, by app code.
+    /// Exclusions rather than a list of chosen types: a type the app learns
+    /// later is associated like the others, as the app switch promised.
+    pub excluded_exts: HashMap<String, Vec<String>>,
     /// Apps that have shortcuts (a Start menu folder with their facades).
     pub shortcut_apps: Vec<String>,
     /// The online catalogue's address, when not the platform's (testing
@@ -29,6 +33,9 @@ pub struct Settings {
     pub catalogue_url: Option<String>,
     /// The window's last language: shortcuts are named in it.
     pub ui_lang: Option<String>,
+    /// The launcher version that last wrote the associations: a new version
+    /// writes them again (names, icons and commands may have changed).
+    pub registered_by: Option<String>,
     /// Where each app is opened, when not at its catalogue address (testing
     /// against another environment). Never written by the launcher itself.
     pub app_urls: HashMap<String, String>,
@@ -87,6 +94,16 @@ impl Settings {
     /// The address `app` is opened at: its own, or the one settings point it to.
     pub fn url_of(&self, app: &crate::catalogue::App) -> String {
         self.app_urls.get(&app.code).cloned().unwrap_or_else(|| app.url.clone())
+    }
+
+    /// Whether files of type `ext` go to `app` (when the app is associated).
+    pub fn ext_chosen(&self, app: &str, ext: &str) -> bool {
+        !self.excluded_exts.get(app).is_some_and(|x| x.iter().any(|e| e == ext))
+    }
+
+    /// `app` with only the file types the user kept: what is registered.
+    pub fn chosen(&self, app: &crate::catalogue::App) -> crate::catalogue::App {
+        app.keeping(|ext| self.ext_chosen(&app.code, ext))
     }
 
     /// The browser for `app`: its own, else the default (None = system default).

@@ -40,6 +40,18 @@ pub struct Facade {
     pub listed: bool,
 }
 
+impl Facade {
+    /// The facade's last path segment (`studio/express` -> `express`): its
+    /// web manifest's name, and a file name part.
+    pub fn slug(&self) -> &str {
+        self.path.rsplit('/').next().unwrap_or(&self.path)
+    }
+
+    pub fn name(&self, lang: &str) -> String {
+        self.names.get(lang).or_else(|| self.names.get("en")).cloned().unwrap_or_else(|| self.slug().to_string())
+    }
+}
+
 fn listed_by_default() -> bool {
     true
 }
@@ -217,6 +229,27 @@ impl App {
             }
         }
         out
+    }
+
+    /// The facade a file of type `ext` opens in: the one marking it primary,
+    /// else the first that lists it. Its name and icon are what the system
+    /// shows for that type.
+    pub fn facade_for(&self, ext: &str) -> Option<&Facade> {
+        let has = |f: &&Facade| f.files.iter().any(|t| t.ext == ext);
+        self.facades
+            .iter()
+            .filter(has)
+            .find(|f| f.files.iter().any(|t| t.ext == ext && t.primary))
+            .or_else(|| self.facades.iter().find(has))
+    }
+
+    /// The same app, its facades listing only the file types `keep` accepts.
+    pub fn keeping(&self, keep: impl Fn(&str) -> bool) -> App {
+        let mut app = self.clone();
+        for f in &mut app.facades {
+            f.files.retain(|t| keep(&t.ext));
+        }
+        app
     }
 
     pub fn name(&self, lang: &str) -> String {

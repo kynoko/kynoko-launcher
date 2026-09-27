@@ -4,7 +4,8 @@ import { Lang, pickLang, t } from './i18n';
 
 interface Profile { id: string; name: string; default: boolean }
 interface Browser { id: string; name: string; engine: string; profiles: Profile[] }
-interface AppView { code: string; name: string; extensions: string[]; associated: boolean; shortcuts: boolean; browser: string | null; profile: string | null }
+interface TypeGroup { facade: string; exts: { ext: string; on: boolean }[] }
+interface AppView { code: string; name: string; types: TypeGroup[]; associated: boolean; shortcuts: boolean; browser: string | null; profile: string | null }
 interface State {
   apps: AppView[];
   browsers: Browser[];
@@ -57,6 +58,25 @@ function profileSelect(state: State, browserId: string | null, value: string | n
   return select;
 }
 
+/**
+ * An app's file types, by the facade each opens in, one tick per type. They
+ * can be chosen before the app is associated: the switch then applies them.
+ */
+function typesOf(app: AppView): HTMLElement {
+  const box = el('div', { class: app.associated ? 'types' : 'types idle', role: 'group', ariaLabel: t(lang, 'TYPES_FOR', { app: app.name }) });
+  for (const group of app.types) {
+    // Extensions are technical: left to right whatever the language.
+    const exts = el('span', { class: 'chips', dir: 'ltr' });
+    for (const x of group.exts) {
+      const tick = el('input', { type: 'checkbox', checked: x.on });
+      tick.addEventListener('change', () => void run(() => invoke('set_extension', { code: app.code, ext: x.ext, on: tick.checked })));
+      exts.append(el('label', { class: 'chip' }, tick, '.' + x.ext));
+    }
+    box.append(el('div', { class: 'type-group' }, el('span', { class: 'facade' }, group.facade), exts));
+  }
+  return box;
+}
+
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
     await action();
@@ -107,11 +127,11 @@ async function render(): Promise<void> {
           el('label', { class: 'switch' }, shortcuts, t(lang, 'SHORTCUTS')),
           open,
         ),
-        // Extensions are technical: left to right whatever the language.
-        el('span', { class: 'exts', dir: 'ltr' }, app.extensions.map((x) => '.' + x).join('  ')),
+        typesOf(app),
       ),
     );
   }
+  if (state.apps.some((a) => a.types.length)) appsCard.append(el('p', { class: 'note' }, t(lang, 'TYPES_HINT')));
   root.append(appsCard);
 
   if (state.windows) {

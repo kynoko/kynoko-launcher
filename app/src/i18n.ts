@@ -6,7 +6,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
-  | 'APPS_TITLE' | 'OPEN_FILES' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
+  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
 >;
@@ -22,6 +22,8 @@ const FR: Dict = {
   NO_BROWSERS: 'Aucun navigateur trouvé : celui du système sera utilisé.',
   APPS_TITLE: 'Applications',
   OPEN_FILES: 'Ouvrir leurs fichiers',
+  TYPES_FOR: "Types de fichiers de {{app}}",
+  TYPES_HINT: "Décochez un type pour le laisser à votre programme habituel.",
   SHORTCUTS: 'Raccourcis',
   OPEN_APP: 'Ouvrir',
   BROWSER_FOR: 'Navigateur de {{app}}',
@@ -47,6 +49,8 @@ const EN: Dict = {
   NO_BROWSERS: "No browser found: the system's will be used.",
   APPS_TITLE: 'Apps',
   OPEN_FILES: 'Open their files',
+  TYPES_FOR: "File types of {{app}}",
+  TYPES_HINT: "Untick a type to leave it to your usual program.",
   SHORTCUTS: 'Shortcuts',
   OPEN_APP: 'Open',
   BROWSER_FOR: 'Browser for {{app}}',
@@ -72,6 +76,8 @@ const ES: Dict = {
   NO_BROWSERS: 'No se ha encontrado ningún navegador: se usará el del sistema.',
   APPS_TITLE: 'Aplicaciones',
   OPEN_FILES: 'Abrir sus archivos',
+  TYPES_FOR: "Tipos de archivo de {{app}}",
+  TYPES_HINT: "Desmarque un tipo para dejarlo a su programa habitual.",
   SHORTCUTS: 'Accesos directos',
   OPEN_APP: 'Abrir',
   BROWSER_FOR: 'Navegador de {{app}}',
@@ -97,6 +103,8 @@ const JA: Dict = {
   NO_BROWSERS: 'ブラウザーが見つかりません。システムの既定を使います。',
   APPS_TITLE: 'アプリ',
   OPEN_FILES: 'ファイルを開く',
+  TYPES_FOR: "{{app}} のファイルの種類",
+  TYPES_HINT: "チェックを外した種類は、いつものプログラムで開かれます。",
   SHORTCUTS: 'ショートカット',
   OPEN_APP: '開く',
   BROWSER_FOR: '{{app}} のブラウザー',
@@ -122,6 +130,8 @@ const ZH_HANS: Dict = {
   NO_BROWSERS: '未找到浏览器：将使用系统默认浏览器。',
   APPS_TITLE: '应用',
   OPEN_FILES: '打开其文件',
+  TYPES_FOR: "{{app}} 的文件类型",
+  TYPES_HINT: "取消勾选某个类型，即交还给您常用的程序打开。",
   SHORTCUTS: '快捷方式',
   OPEN_APP: '打开',
   BROWSER_FOR: '{{app}} 的浏览器',
@@ -147,6 +157,8 @@ const ZH_HANT: Dict = {
   NO_BROWSERS: '找不到瀏覽器：將使用系統預設瀏覽器。',
   APPS_TITLE: '應用程式',
   OPEN_FILES: '開啟其檔案',
+  TYPES_FOR: "{{app}} 的檔案類型",
+  TYPES_HINT: "取消勾選某個類型，即交還給您慣用的程式開啟。",
   SHORTCUTS: '捷徑',
   OPEN_APP: '開啟',
   BROWSER_FOR: '{{app}} 的瀏覽器',
@@ -172,6 +184,8 @@ const AR: Dict = {
   NO_BROWSERS: 'لم يُعثر على أي متصفح: سيُستخدم متصفح النظام.',
   APPS_TITLE: 'التطبيقات',
   OPEN_FILES: 'فتح ملفاتها',
+  TYPES_FOR: "أنواع ملفات {{app}}",
+  TYPES_HINT: "ألغِ تحديد نوع ليبقى مع برنامجك المعتاد.",
   SHORTCUTS: 'اختصارات',
   OPEN_APP: 'فتح',
   BROWSER_FOR: 'متصفح {{app}}',

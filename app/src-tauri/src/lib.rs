@@ -50,14 +50,19 @@ const MARKER: &str = "kynokoLauncher=1";
 enum Command {
     /// The settings window, optionally on one app.
     Window(Option<String>),
-    Open(Vec<PathBuf>),
+    /// Files to open, and the app the system entry named (`open --app <code>`),
+    /// when it named one.
+    Open(Option<String>, Vec<PathBuf>),
     Launch(String),
     Cleanup,
 }
 
 fn parse(args: &[String]) -> Command {
     match args.first().map(String::as_str) {
-        Some("open") => Command::Open(args[1..].iter().map(PathBuf::from).collect()),
+        Some("open") => match args.get(1).map(String::as_str) {
+            Some("--app") => Command::Open(args.get(2).filter(|c| plain_code(c)).cloned(), args.iter().skip(3).map(PathBuf::from).collect()),
+            _ => Command::Open(None, args[1..].iter().map(PathBuf::from).collect()),
+        },
         Some("launch") => Command::Launch(args.get(1).cloned().unwrap_or_default()),
         Some("cleanup") => Command::Cleanup,
         Some(url) if url.starts_with(&format!("{}:", assoc::SCHEME)) => Command::Window(app_param(url)),
@@ -72,8 +77,14 @@ fn app_param(url: &str) -> Option<String> {
     query
         .split('&')
         .find_map(|pair| pair.strip_prefix("app="))
-        .filter(|code| !code.is_empty() && code.len() <= 40 && code.chars().all(|c| c.is_ascii_alphanumeric()))
+        .filter(|code| plain_code(code))
         .map(str::to_string)
+}
+
+/// An app code as the catalogue writes them: a link or a command line must
+/// not smuggle anything else in.
+fn plain_code(code: &str) -> bool {
+    !code.is_empty() && code.len() <= 40 && code.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
 struct Shared {
@@ -122,16 +133,21 @@ fn browser_by_id(id: Option<String>) -> Option<browsers::Browser> {
     browsers::installed().into_iter().find(|b| b.id == id)
 }
 
-/// `open <file>`: one bridge session per file, one launch per app.
-fn open_files(shared: &Shared, files: &[PathBuf]) -> Result<(), String> {
+/// `open [--app <code>] <file>`: one bridge session and one launch per file.
+/// The app the system entry named wins when it opens that type; else the
+/// associated app the user kept that type for; else any app that opens it.
+fn open_files(shared: &Shared, named: Option<&str>, files: &[PathBuf]) -> Result<(), String> {
     let settings = Settings::load();
     let bridge = shared.bridge()?;
     for path in files {
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         let catalogue = shared.catalogue();
         let every: Vec<String> = catalogue.apps.iter().map(|a| a.code.clone()).collect();
+        let kept: Vec<String> = settings.associated_apps.iter().filter(|c| settings.ext_chosen(c, &ext)).cloned().collect();
+        let named: Vec<String> = named.map(|c| vec![c.to_string()]).unwrap_or_default();
         let app = catalogue
-            .app_for_ext(&ext, &settings.associated_apps)
+            .app_for_ext(&ext, &named)
+            .or_else(|| catalogue.app_for_ext(&ext, &kept))
             .or_else(|| catalogue.app_for_ext(&ext, &every))
             .ok_or_else(|| format!("no Kynoko app opens .{ext}"))?;
         let base = app_url(&settings, app);
@@ -177,7 +193,7 @@ fn dispatch(app: &AppHandle, command: Command) {
             let _ = app.emit("focus-app", focus);
             Ok(())
         }
-        Command::Open(files) => open_files(&shared, &files),
+        Command::Open(named, files) => open_files(&shared, named.as_deref(), &files),
         Command::Launch(target) => launch_app(&shared, &target),
         Command::Cleanup => {
             let r = cleanup();
@@ -213,7 +229,8 @@ fn watch_idle(app: AppHandle) {
 struct AppView {
     code: String,
     name: String,
-    extensions: Vec<String>,
+    /// The app's file types, by the facade each one opens in.
+    types: Vec<TypeGroup>,
     associated: bool,
     shortcuts: bool,
     browser: Option<String>,
@@ -237,6 +254,35 @@ struct StateView {
     focus: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TypeGroup {
+    facade: String,
+    exts: Vec<ExtView>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtView {
+    ext: String,
+    /// Kept by the user (acted on while the app is associated).
+    on: bool,
+}
+
+/// `app`'s types grouped by the facade that opens them, in catalogue order.
+fn type_groups(app: &catalogue::App, settings: &Settings, lang: &str) -> Vec<TypeGroup> {
+    let mut groups: Vec<(String, TypeGroup)> = Vec::new();
+    for ext in app.extensions() {
+        let Some(facade) = app.facade_for(&ext) else { continue };
+        let view = ExtView { on: settings.ext_chosen(&app.code, &ext), ext };
+        match groups.iter_mut().find(|(path, _)| *path == facade.path) {
+            Some((_, g)) => g.exts.push(view),
+            None => groups.push((facade.path.clone(), TypeGroup { facade: facade.name(lang), exts: vec![view] })),
+        }
+    }
+    groups.into_iter().map(|(_, g)| g).collect()
+}
+
 #[tauri::command]
 fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
     let mut settings = Settings::load();
@@ -255,7 +301,7 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
             .map(|a| AppView {
                 code: a.code.clone(),
                 name: a.name(&lang),
-                extensions: a.extensions(),
+                types: type_groups(a, &settings, &lang),
                 associated: settings.associated_apps.contains(&a.code),
                 shortcuts: settings.shortcut_apps.contains(&a.code),
                 browser: settings.app_browsers.get(&a.code).cloned(),
@@ -317,7 +363,7 @@ fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> R
     let mut settings = Settings::load();
     let mut inventory = Inventory::load();
     if on {
-        assoc::register(app, &settings, &mut inventory).map_err(|e| e.to_string())?;
+        assoc::register(&settings.chosen(app), &settings, &mut inventory).map_err(|e| e.to_string())?;
         if !settings.associated_apps.contains(&code) {
             settings.associated_apps.push(code);
         }
@@ -326,6 +372,33 @@ fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> R
         settings.associated_apps.retain(|c| c != &code);
     }
     settings.save().map_err(|e| e.to_string())
+}
+
+/// Keeps or takes out one file type of an app. An associated app is
+/// registered again at once, with its new set of types.
+#[tauri::command]
+fn set_extension(shared: tauri::State<'_, Shared>, code: String, ext: String, on: bool) -> Result<(), String> {
+    let catalogue = shared.catalogue();
+    let app = catalogue.app(&code).ok_or("unknown app")?;
+    if !app.extensions().contains(&ext) {
+        return Err("unknown file type".into());
+    }
+    let mut settings = Settings::load();
+    let excluded = settings.excluded_exts.entry(code.clone()).or_default();
+    excluded.retain(|e| e != &ext);
+    if !on {
+        excluded.push(ext);
+    }
+    if settings.excluded_exts.get(&code).is_some_and(|x| x.is_empty()) {
+        settings.excluded_exts.remove(&code);
+    }
+    settings.save().map_err(|e| e.to_string())?;
+    if settings.associated_apps.contains(&code) {
+        let mut inventory = Inventory::load();
+        assoc::unregister(app, &mut inventory).map_err(|e| e.to_string())?;
+        assoc::register(&settings.chosen(app), &settings, &mut inventory).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -389,13 +462,14 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
     let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
     for code in settings.associated_apps.clone() {
         let (Some(before), after) = (old.app(&code), new.app(&code)) else { continue };
-        if after.map(|a| a.extensions()) == Some(before.extensions()) {
+        // Types, facade names and routes: anything the system shows.
+        if after.map(|a| settings.chosen(a)) == Some(settings.chosen(before)) {
             continue;
         }
         let _ = assoc::unregister(before, &mut inventory);
         match after {
             Some(a) => {
-                let _ = assoc::register(a, &settings, &mut inventory);
+                let _ = assoc::register(&settings.chosen(a), &settings, &mut inventory);
             }
             None => settings.associated_apps.retain(|c| c != &code),
         }
@@ -419,6 +493,31 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
 /// The online catalogue, in the background: when due (12 h after the last
 /// success, sooner after a failure), after a random delay so that machines
 /// started together do not all ask together.
+/// After an update, the associations are written again by the new version:
+/// an older one may have written other names, icons or commands. Once per
+/// version, in the background.
+fn refresh_registrations(app: &AppHandle) {
+    let version = app.package_info().version.to_string();
+    if Settings::load().registered_by.as_deref() == Some(version.as_str()) {
+        return;
+    }
+    let catalogue = app.state::<Shared>().catalogue();
+    thread::spawn(move || {
+        let settings = Settings::load();
+        let mut inventory = Inventory::load();
+        for code in settings.associated_apps.clone() {
+            if let Some(app) = catalogue.app(&code) {
+                let _ = assoc::unregister(app, &mut inventory);
+                let _ = assoc::register(&settings.chosen(app), &settings, &mut inventory);
+            }
+        }
+        // Read again: the window may have changed a setting meanwhile.
+        let mut latest = Settings::load();
+        latest.registered_by = Some(version);
+        let _ = latest.save();
+    });
+}
+
 fn watch_catalogue(app: AppHandle) {
     thread::spawn(move || {
         let mut jitter = [0u8; 2];
@@ -464,7 +563,7 @@ fn opened(app: &AppHandle, urls: &[tauri::Url]) {
     shared.opened_by_event.store(true, std::sync::atomic::Ordering::SeqCst);
     let files: Vec<PathBuf> = urls.iter().filter(|u| u.scheme() == "file").filter_map(|u| u.to_file_path().ok()).collect();
     if !files.is_empty() {
-        dispatch(app, Command::Open(files));
+        dispatch(app, Command::Open(None, files));
     }
     for link in urls.iter().filter(|u| u.scheme() == assoc::SCHEME) {
         dispatch(app, Command::Window(app_param(link.as_str())));
@@ -501,6 +600,7 @@ pub fn run() {
             set_app_browser,
             set_app_profile,
             set_associated,
+            set_extension,
             set_shortcuts,
             check_catalogue,
             launch,
@@ -515,6 +615,7 @@ pub fn run() {
                 }
             }
             if !cleaning {
+                refresh_registrations(&handle);
                 watch_catalogue(handle.clone());
             }
             // macOS starts the launcher WITHOUT arguments for a double-clicked
@@ -575,6 +676,40 @@ mod tests {
         assert_eq!(app_param("kynoko-launcher://settings?app=../../evil"), None);
         assert_eq!(app_param("kynoko-launcher://settings"), None);
         assert!(matches!(parse(&["kynoko-launcher://settings?app=Office".into()]), Command::Window(Some(_))));
+    }
+
+    #[test]
+    fn open_arguments() {
+        let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        match parse(&args(&["open", "--app", "MediaStudio", "C:\\a b.png"])) {
+            Command::Open(Some(app), files) => {
+                assert_eq!(app, "MediaStudio");
+                assert_eq!(files, [PathBuf::from("C:\\a b.png")]);
+            }
+            _ => panic!("open --app"),
+        }
+        assert!(matches!(parse(&args(&["open", "x.docx"])), Command::Open(None, f) if f.len() == 1));
+        assert!(matches!(parse(&args(&["open", "--app", "../evil", "x"])), Command::Open(None, _)));
+    }
+
+    #[test]
+    fn chosen_types() {
+        let c = Catalogue::bundled();
+        let office = c.app("Office").unwrap();
+        assert_eq!(office.facade_for("csv").map(|f| f.slug()), Some("spreadsheet"));
+        let photo = c.app("PhotoStudio").unwrap();
+        // Listed by five facades: the one marking it primary opens it.
+        assert_eq!(photo.facade_for("png").map(|f| f.slug()), Some("express"));
+        assert_eq!(photo.facade_for("psd").map(|f| f.slug()), Some("edit"));
+        let mut s = Settings::default();
+        s.excluded_exts.insert("Office".into(), vec!["csv".into(), "txt".into()]);
+        let kept = s.chosen(office).extensions();
+        assert!(!kept.contains(&"csv".to_string()) && !kept.contains(&"txt".to_string()));
+        assert!(kept.contains(&"tsv".to_string()));
+        assert_eq!(kept.len(), office.extensions().len() - 2);
+        let groups = type_groups(office, &s, "fr");
+        assert_eq!(groups.iter().map(|g| g.facade.as_str()).collect::<Vec<_>>(), ["Document", "Tableur", "Présentation"]);
+        assert!(groups[1].exts.iter().any(|e| e.ext == "csv" && !e.on));
     }
 
     #[test]

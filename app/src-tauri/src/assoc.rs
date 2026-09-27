@@ -24,9 +24,13 @@ fn prog_id(app: &App, ext: &str) -> String {
     format!("Kynoko.{}.{}", app.code, ext)
 }
 
-/// Registers the launcher for every file type `app` opens.
+/// Registers the launcher for every file type `app` opens (the caller passes
+/// the app as the user trimmed it, see Settings::chosen). Each type wears the
+/// name and the icon of the facade it opens in, and its command names the
+/// app: with two apps listed for the same type under "Open with", each entry
+/// opens its own.
 #[cfg(windows)]
-pub fn register(app: &App, _settings: &crate::settings::Settings, inventory: &mut Inventory) -> std::io::Result<()> {
+pub fn register(app: &App, settings: &crate::settings::Settings, inventory: &mut Inventory) -> std::io::Result<()> {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
 
@@ -43,16 +47,32 @@ pub fn register(app: &App, _settings: &crate::settings::Settings, inventory: &mu
     registered.set_value(APPLICATION_NAME, &CAPABILITIES)?;
     let (file_assoc, _) = hkcu.create_subkey(format!(r"{CAPABILITIES}\FileAssociations"))?;
 
+    let lang = settings.ui_lang.as_deref().unwrap_or("en");
+    let mut icons: std::collections::HashMap<String, Option<std::path::PathBuf>> = std::collections::HashMap::new();
     for ext in app.extensions() {
         let id = prog_id(app, &ext);
         let class = format!(r"{CLASSES}\{id}");
+        let facade = app.facade_for(&ext);
+        let label = match facade {
+            Some(f) => format!("{} - {}", app.name(lang), f.name(lang)),
+            None => app.name(lang),
+        };
+        let icon_file = facade.and_then(|f| {
+            icons
+                .entry(f.path.clone())
+                .or_insert_with(|| crate::shortcuts::type_icon(app, f, settings, "ico", inventory))
+                .clone()
+        });
         inventory.record(Artefact::RegistryKey { path: class.clone() })?;
         let (key, _) = hkcu.create_subkey(&class)?;
-        key.set_value("", &format!("{} ({})", app.name("en"), ext.to_uppercase()))?;
+        key.set_value("", &format!("{label} ({})", ext.to_uppercase()))?;
         let (icon, _) = key.create_subkey("DefaultIcon")?;
-        icon.set_value("", &format!("\"{exe}\",0"))?;
+        match icon_file {
+            Some(path) => icon.set_value("", &format!("\"{}\",0", path.to_string_lossy()))?,
+            None => icon.set_value("", &format!("\"{exe}\",0"))?,
+        }
         let (command, _) = key.create_subkey(r"shell\open\command")?;
-        command.set_value("", &format!("\"{exe}\" open \"%1\""))?;
+        command.set_value("", &format!("\"{exe}\" open --app {} \"%1\"", app.code))?;
 
         // In the extension's "Open with" list: a value in a key that is not ours.
         let with = format!(r"{CLASSES}\.{ext}\OpenWithProgids");
@@ -84,6 +104,7 @@ pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
             let _ = fa.delete_value(format!(".{ext}"));
         }
     }
+    crate::shortcuts::remove_type_icons(app, inventory)?;
     notify_shell();
     Ok(())
 }

@@ -131,8 +131,17 @@ fn profiles(engine: &Engine, program: &str, flatpak_id: Option<&str>) -> Vec<Pro
 
 /* ------------------------------------------------------------ associations */
 
-fn open_entry(app: &App) -> String {
-    format!("kynoko-launcher-open-{}.desktop", app.code)
+/// The prefix of `app`'s open entries: one per facade its types open in
+/// (`kynoko-launcher-open-<app>-<facade>.desktop`), so "Open with" shows the
+/// facade's name and icon. Launcher 0.1 wrote a single `...-<app>.desktop`,
+/// still recognised on removal.
+fn open_prefix(app: &App) -> String {
+    format!("kynoko-launcher-open-{}-", app.code)
+}
+
+fn is_open_entry(app: &App, name: &str) -> bool {
+    let legacy = format!("kynoko-launcher-open-{}.desktop", app.code);
+    name.ends_with(&legacy) || name.rsplit('/').next().is_some_and(|n| n.starts_with(&open_prefix(app)) && n.ends_with(".desktop"))
 }
 
 const URL_ENTRY: &str = "kynoko-launcher-url.desktop";
@@ -168,30 +177,40 @@ pub fn register(app: &App, settings: &Settings, inventory: &mut Inventory) -> st
     let package = data_home().join("mime/packages").join(format!("kynoko-launcher-{}.xml", app.code));
     write_recorded(&package, &xdg::mime_package(&pairs), inventory)?;
 
-    let mimes: Vec<&str> = pairs.iter().map(|(m, _)| m.as_str()).collect();
-    let entry = open_entry(app);
-    let name = format!("{} (Kynoko Launcher)", app.name(settings.ui_lang.as_deref().unwrap_or("en")));
-    let text = xdg::render_entry(
-        &[
-            ("Type", "Application".into()),
-            ("Name", name),
-            ("Exec", format!("{} open %F", xdg::exec_quote(&exe()))),
+    let lang = settings.ui_lang.as_deref().unwrap_or("en");
+    // Each type goes to the facade it opens in: one entry per such facade.
+    let mut by_facade: Vec<(&crate::catalogue::Facade, Vec<&str>)> = Vec::new();
+    for (mime, ext) in &pairs {
+        let Some(facade) = app.facade_for(ext) else { continue };
+        match by_facade.iter_mut().find(|(f, _)| f.path == facade.path) {
+            Some((_, mimes)) => mimes.push(mime),
+            None => by_facade.push((facade, vec![mime])),
+        }
+    }
+    let mut list = std::fs::read_to_string(mimeapps()).unwrap_or_default();
+    for (facade, mimes) in by_facade {
+        let entry = format!("{}{}.desktop", open_prefix(app), facade.slug());
+        let mut fields = vec![
+            ("Type", "Application".to_string()),
+            ("Name", format!("{} - {}", app.name(lang), facade.name(lang))),
+            ("Exec", format!("{} open --app {} %F", xdg::exec_quote(&exe()), app.code)),
             ("MimeType", format!("{};", mimes.join(";"))),
             ("NoDisplay", "true".into()),
-        ],
-        &[],
-    );
-    write_recorded(&applications().join(&entry), &text, inventory)?;
-
-    // Default handler of each type, the previous one kept to be restored.
-    let mut list = std::fs::read_to_string(mimeapps()).unwrap_or_default();
-    for mime in mimes {
-        let previous = xdg::mimeapps_get(&list, xdg::defaults_group(), mime);
-        if previous.as_deref() != Some(entry.as_str()) {
-            inventory.record(Artefact::MimeDefault { mime: mime.to_string(), desktop: entry.clone(), previous })?;
+        ];
+        if let Some(png) = crate::shortcuts::type_icon(app, facade, settings, "png", inventory) {
+            fields.push(("Icon", png.to_string_lossy().into_owned()));
         }
-        list = xdg::mimeapps_set(&list, xdg::defaults_group(), mime, Some(&entry));
-        list = xdg::mimeapps_added(&list, mime, &entry, true);
+        write_recorded(&applications().join(&entry), &xdg::render_entry(&fields, &[]), inventory)?;
+
+        // Default handler of each type, the previous one kept to be restored.
+        for mime in mimes {
+            let previous = xdg::mimeapps_get(&list, xdg::defaults_group(), mime);
+            if previous.as_deref() != Some(entry.as_str()) {
+                inventory.record(Artefact::MimeDefault { mime: mime.to_string(), desktop: entry.clone(), previous })?;
+            }
+            list = xdg::mimeapps_set(&list, xdg::defaults_group(), mime, Some(&entry));
+            list = xdg::mimeapps_added(&list, mime, &entry, true);
+        }
     }
     write_mimeapps(&list)?;
     refresh_databases();
@@ -220,20 +239,20 @@ pub fn restore_default(mime: &str, desktop: &str, previous: Option<&str>) {
 
 /// Removes what `register` wrote for `app`: its entry, its package, its defaults.
 pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
-    let entry = open_entry(app);
     for a in inventory.artefacts.clone() {
         match &a {
-            Artefact::MimeDefault { mime, desktop, previous } if *desktop == entry => {
+            Artefact::MimeDefault { mime, desktop, previous } if is_open_entry(app, desktop) => {
                 restore_default(mime, desktop, previous.as_deref());
                 inventory.forget(&a)?;
             }
-            Artefact::File { path } if path.ends_with(&entry) || path.ends_with(&format!("kynoko-launcher-{}.xml", app.code)) => {
+            Artefact::File { path } if is_open_entry(app, path) || path.ends_with(&format!("kynoko-launcher-{}.xml", app.code)) => {
                 let _ = std::fs::remove_file(path);
                 inventory.forget(&a)?;
             }
             _ => {}
         }
     }
+    crate::shortcuts::remove_type_icons(app, inventory)?;
     refresh_databases();
     Ok(())
 }

@@ -39,12 +39,24 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
   outline: 1px solid rgba(var(--kynoko-glow-rgb), 0.45);
 }
 .row .name { font-weight: 650; }
-.row .exts {
-  grid-column: 1 / -1;
-  color: var(--kynoko-hint);
-  font-size: 0.82rem;
-  overflow-wrap: anywhere;
+/* The app's file types, by facade: one tick per type. */
+.row .types { grid-column: 1 / -1; display: grid; gap: 6px; font-size: 0.82rem; }
+.row .types.idle { opacity: 0.6; }
+.type-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.type-group .facade { color: var(--kynoko-hint); min-inline-size: 9em; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+label.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 1px;
+  padding-inline: 4px 8px;
+  border: 1px solid var(--kynoko-hairline);
+  border-radius: 999px;
+  cursor: pointer;
 }
+label.chip:has(input:not(:checked)) { color: var(--kynoko-hint); text-decoration: line-through; }
+label.chip input { margin: 0; }
 .row .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 
 select, button {
