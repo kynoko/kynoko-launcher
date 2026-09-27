@@ -297,8 +297,11 @@ async function render(): Promise<void> {
   const check = el('button', { type: 'button' }, t(lang, 'CHECK_NOW'));
   check.addEventListener('click', () => void run(() => invoke('check_catalogue')));
   const status = el('span', { class: 'note' }, `Kynoko Launcher ${state.version} · ${t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) })}`);
-  const foot = el('div', { class: 'foot' }, el('span', { class: 'field' }, status, check), remove);
+  const foot = el('div', { class: 'foot' }, el('span', { class: 'field' }, status, check));
   root.append(foot);
+  // The reset, set apart and said in full: the launcher stays, everything it
+  // did to the system goes, and its settings with it.
+  root.append(el('div', { class: 'reset' }, remove, el('p', { class: 'note' }, t(lang, 'REMOVE_NOTE'))));
   // A failure is said here, quietly, with the last success: never a notification.
   if (state.catalogueError) {
     const last = state.catalogueChecked ? new Date(state.catalogueChecked * 1000).toLocaleString(lang) : null;

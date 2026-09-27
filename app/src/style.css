@@ -206,3 +206,10 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
 .note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
 .error { color: var(--kynoko-danger); margin: 10px 0 0; }
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-block-start: 26px; }
+/* The reset: apart from the rest, its effect written beside it. */
+.reset {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-block-start: 22px; padding-block-start: 16px;
+  border-block-start: 1px solid var(--kynoko-hairline);
+}
+.reset .note { flex: 1; min-inline-size: 16em; margin: 0; }
