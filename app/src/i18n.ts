@@ -6,7 +6,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE'
-  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUTS_WINDOWS' | 'SHORTCUTS_MACOS' | 'SHORTCUTS_LINUX' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
+  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUTS_WINDOWS' | 'SHORTCUTS_MACOS' | 'SHORTCUTS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
 >;
@@ -32,7 +32,8 @@ const FR: Dict = {
   SHORTCUTS_WINDOWS: "Ajouter au menu Démarrer",
   SHORTCUTS_MACOS: "Ajouter au dossier Applications",
   SHORTCUTS_LINUX: "Ajouter au menu des applications",
-  OPEN_APP: 'Ouvrir',
+  OPEN_APP: 'Ouvrir {{app}}',
+  OPEN: "Ouvrir",
   BROWSER_FOR: 'Navigateur de {{app}}',
   DEFAULT_APPS_NOTE: "Windows ne laisse aucun programme se choisir lui-même par défaut : dans les paramètres, choisissez Kynoko Launcher pour les types de fichiers voulus.",
   DEFAULT_APPS_BUTTON: 'Ouvrir les applications par défaut',
@@ -66,7 +67,8 @@ const EN: Dict = {
   SHORTCUTS_WINDOWS: "Add to the Start menu",
   SHORTCUTS_MACOS: "Add to the Applications folder",
   SHORTCUTS_LINUX: "Add to the applications menu",
-  OPEN_APP: 'Open',
+  OPEN_APP: 'Open {{app}}',
+  OPEN: "Open",
   BROWSER_FOR: 'Browser for {{app}}',
   DEFAULT_APPS_NOTE: 'Windows lets no program make itself the default: in Settings, choose Kynoko Launcher for the file types you want.',
   DEFAULT_APPS_BUTTON: 'Open default apps',
@@ -100,7 +102,8 @@ const ES: Dict = {
   SHORTCUTS_WINDOWS: "Añadir al menú Inicio",
   SHORTCUTS_MACOS: "Añadir a la carpeta Aplicaciones",
   SHORTCUTS_LINUX: "Añadir al menú de aplicaciones",
-  OPEN_APP: 'Abrir',
+  OPEN_APP: 'Abrir {{app}}',
+  OPEN: "Abrir",
   BROWSER_FOR: 'Navegador de {{app}}',
   DEFAULT_APPS_NOTE: 'Windows no deja que ningún programa se elija a sí mismo como predeterminado: en Configuración, elige Kynoko Launcher para los tipos de archivo que quieras.',
   DEFAULT_APPS_BUTTON: 'Abrir aplicaciones predeterminadas',
@@ -134,7 +137,8 @@ const JA: Dict = {
   SHORTCUTS_WINDOWS: "スタートメニューに追加",
   SHORTCUTS_MACOS: "アプリケーションフォルダに追加",
   SHORTCUTS_LINUX: "アプリケーションメニューに追加",
-  OPEN_APP: '開く',
+  OPEN_APP: '{{app}} を開く',
+  OPEN: "開く",
   BROWSER_FOR: '{{app}} のブラウザー',
   DEFAULT_APPS_NOTE: 'Windows ではプログラムが自分自身を既定に設定できません。設定で、必要なファイルの種類に Kynoko Launcher を選んでください。',
   DEFAULT_APPS_BUTTON: '既定のアプリを開く',
@@ -168,7 +172,8 @@ const ZH_HANS: Dict = {
   SHORTCUTS_WINDOWS: "添加到“开始”菜单",
   SHORTCUTS_MACOS: "添加到“应用程序”文件夹",
   SHORTCUTS_LINUX: "添加到应用程序菜单",
-  OPEN_APP: '打开',
+  OPEN_APP: '打开 {{app}}',
+  OPEN: "打开",
   BROWSER_FOR: '{{app}} 的浏览器',
   DEFAULT_APPS_NOTE: 'Windows 不允许程序将自己设为默认：请在设置中为所需的文件类型选择 Kynoko Launcher。',
   DEFAULT_APPS_BUTTON: '打开默认应用',
@@ -202,7 +207,8 @@ const ZH_HANT: Dict = {
   SHORTCUTS_WINDOWS: "新增至「開始」功能表",
   SHORTCUTS_MACOS: "新增至「應用程式」檔案夾",
   SHORTCUTS_LINUX: "新增至應用程式選單",
-  OPEN_APP: '開啟',
+  OPEN_APP: '開啟 {{app}}',
+  OPEN: "開啟",
   BROWSER_FOR: '{{app}} 的瀏覽器',
   DEFAULT_APPS_NOTE: 'Windows 不允許程式將自己設為預設：請在設定中為所需的檔案類型選擇 Kynoko Launcher。',
   DEFAULT_APPS_BUTTON: '開啟預設應用程式',
@@ -236,7 +242,8 @@ const AR: Dict = {
   SHORTCUTS_WINDOWS: "إضافة إلى قائمة ابدأ",
   SHORTCUTS_MACOS: "إضافة إلى مجلد التطبيقات",
   SHORTCUTS_LINUX: "إضافة إلى قائمة التطبيقات",
-  OPEN_APP: 'فتح',
+  OPEN_APP: 'فتح {{app}}',
+  OPEN: "فتح",
   BROWSER_FOR: 'متصفح {{app}}',
   DEFAULT_APPS_NOTE: 'لا يسمح Windows لأي برنامج بأن يجعل نفسه افتراضيًا: في الإعدادات، اختر Kynoko Launcher لأنواع الملفات التي تريدها.',
   DEFAULT_APPS_BUTTON: 'فتح التطبيقات الافتراضية',

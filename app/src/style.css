@@ -38,7 +38,17 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
   background: rgba(var(--kynoko-glow-rgb), 0.1);
   outline: 1px solid rgba(var(--kynoko-glow-rgb), 0.45);
 }
-.row .name { font-weight: 650; display: inline-flex; align-items: center; gap: 10px; }
+/* The app's icon and name: the button that opens it. */
+button.name {
+  justify-self: start;
+  display: inline-flex; align-items: center; gap: 10px;
+  min-block-size: 40px; padding-block: 4px; padding-inline: 6px 12px; margin-inline-start: -6px;
+  border: 1px solid transparent; background: none;
+  font-weight: 650; text-align: start;
+}
+button.name .label { display: flex; flex-direction: column; line-height: 1.2; white-space: nowrap; }
+button.name .open { font-size: 0.78rem; font-weight: 600; color: var(--kynoko-primary); }
+button.name:hover { border-color: var(--kynoko-hairline); background: rgba(var(--kynoko-glow-rgb), 0.08); color: var(--kynoko-primary); }
 .app-icon { inline-size: 28px; block-size: 28px; border-radius: 7px; flex: none; }
 /* The app's file types, by facade: one tick per type. */
 .row .types { grid-column: 1 / -1; display: grid; gap: 6px; font-size: 0.82rem; }

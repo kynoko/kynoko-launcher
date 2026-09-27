@@ -162,21 +162,25 @@ async function render(): Promise<void> {
     toggle.addEventListener('change', () => void run(() => invoke('set_associated', { code: app.code, on: toggle.checked })));
     const shortcuts = el('input', { type: 'checkbox', checked: app.shortcuts });
     shortcuts.addEventListener('change', () => void run(() => invoke('set_shortcuts', { code: app.code, on: shortcuts.checked, lang })));
-    const open = el('button', { type: 'button' }, t(lang, 'OPEN_APP'));
+    // The app itself, icon and name, is what opens it.
+    const open = el('button', { type: 'button', class: 'name', ariaLabel: t(lang, 'OPEN_APP', { app: app.name }) },
+      iconOf(app.code),
+      el('span', { class: 'label' }, el('span', {}, app.name), el('span', { class: 'open' }, t(lang, 'OPEN'))));
     open.addEventListener('click', () => void run(() => invoke('launch', { target: app.code })));
+    // Double-click only means something for an app that opens files.
+    const opensFiles = app.types.length > 0;
     appsCard.append(
       el('div', { class: app.code === state.focus ? 'row focus' : 'row', id: 'app-' + app.code },
-        el('span', { class: 'name' }, iconOf(app.code), app.name),
+        open,
         el('span', { class: 'controls' },
           browserSelect(state, app.browser, t(lang, 'FOLLOW_DEFAULT'), t(lang, 'BROWSER_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_browser', { code: app.code, id }))),
           ...[profileSelect(state, app.browser, app.profile, t(lang, 'PROFILE_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_profile', { code: app.code, id })))].filter((x): x is HTMLSelectElement => !!x),
-          el('label', { class: 'switch' }, toggle, t(lang, 'OPEN_FILES')),
+          ...(opensFiles ? [el('label', { class: 'switch' }, toggle, t(lang, 'OPEN_FILES'))] : []),
           el('label', { class: 'switch' }, shortcuts, t(lang, state.os === 'macos' ? 'SHORTCUTS_MACOS' : state.os === 'linux' ? 'SHORTCUTS_LINUX' : 'SHORTCUTS_WINDOWS')),
-          open,
         ),
-        typesOf(app),
+        ...(opensFiles ? [typesOf(app)] : []),
       ),
     );
   }
