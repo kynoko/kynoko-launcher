@@ -445,7 +445,11 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
                 shortcuts: settings.shortcut_apps.contains(&a.code),
                 shortcut_items: shortcuts::all_items(a, &settings, &lang)
                     .into_iter()
-                    .map(|i| ShortcutView { on: settings.shortcut_chosen(&a.code, &i.key), key: i.key, name: i.short })
+                    .map(|i| ShortcutView {
+                        on: settings.shortcut_chosen(&a.code, &i.key),
+                        key: i.key,
+                        name: if cfg!(target_os = "macos") { i.short } else { i.name },
+                    })
                     .collect(),
                 browser: settings.app_browsers.get(&a.code).cloned(),
                 profile: settings.app_profiles.get(&a.code).cloned(),

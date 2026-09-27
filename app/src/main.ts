@@ -118,17 +118,19 @@ function iconOf(code: string): HTMLElement {
   return img;
 }
 
-/** Which of the app's entries the menu gets: the app, and each facade. */
-function shortcutItemsOf(app: AppView): HTMLElement {
-  const chips = el('span', { class: 'chips' });
+/**
+ * Which of the app's shortcuts the menu gets, one per line, named as the menu
+ * will show them: the app first, then each facade.
+ */
+function shortcutItemsOf(app: AppView, os: string): HTMLElement {
+  const title = t(lang, os === 'macos' ? 'SHORTCUT_ITEMS_MACOS' : os === 'linux' ? 'SHORTCUT_ITEMS_LINUX' : 'SHORTCUT_ITEMS_WINDOWS');
+  const list = el('div', { class: 'shortcut-list', role: 'group', ariaLabel: title }, el('span', { class: 'facade' }, title));
   for (const item of app.shortcutItems) {
     const tick = el('input', { type: 'checkbox', checked: item.on });
     tick.addEventListener('change', () => void run(() => invoke('set_shortcut_item', { code: app.code, key: item.key, on: tick.checked, lang })));
-    chips.append(el('label', { class: item.key ? 'chip' : 'chip main' }, tick, item.name));
+    list.append(el('label', { class: item.key ? 'shortcut' : 'shortcut main' }, tick, item.name));
   }
-  const label = t(lang, 'SHORTCUT_ITEMS');
-  return el('div', { class: 'types', role: 'group', ariaLabel: label },
-    el('div', { class: 'type-group' }, el('span', { class: 'facade' }, label), chips));
+  return list;
 }
 
 async function run(action: () => Promise<unknown>): Promise<void> {
@@ -195,7 +197,7 @@ async function render(): Promise<void> {
           el('label', { class: 'switch' }, shortcuts, t(lang, state.os === 'macos' ? 'SHORTCUTS_MACOS' : state.os === 'linux' ? 'SHORTCUTS_LINUX' : 'SHORTCUTS_WINDOWS')),
         ),
         ...(opensFiles ? [typesOf(app)] : []),
-        ...(app.shortcuts && app.shortcutItems.length > 1 ? [shortcutItemsOf(app)] : []),
+        ...(app.shortcuts && app.shortcutItems.length > 1 ? [shortcutItemsOf(app, state.os)] : []),
       ),
     );
   }

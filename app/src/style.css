@@ -68,7 +68,12 @@ label.chip {
 }
 label.chip:has(input:not(:checked)) { color: var(--kynoko-hint); text-decoration: line-through; }
 label.chip input { margin: 0; }
-label.chip.main { font-weight: 650; }
+/* The app's shortcuts: one per line, named as the menu shows them. */
+.shortcut-list { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; font-size: 0.86rem; }
+.shortcut-list .facade { color: var(--kynoko-hint); margin-block-end: 2px; }
+label.shortcut { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding-inline-start: 4px; }
+label.shortcut.main { font-weight: 650; }
+label.shortcut:has(input:not(:checked)) { color: var(--kynoko-hint); }
 .types .bulk { display: flex; gap: 12px; }
 button.link {
   min-block-size: 0;
