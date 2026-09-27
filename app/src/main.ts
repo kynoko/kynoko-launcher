@@ -6,7 +6,7 @@ interface Profile { id: string; name: string; default: boolean }
 interface Browser { id: string; name: string; engine: string; profiles: Profile[] }
 interface TypeGroup { facade: string; exts: { ext: string; on: boolean }[] }
 interface ShortcutItem { key: string; name: string; on: boolean }
-interface AppView { code: string; name: string; types: TypeGroup[]; associated: boolean; shortcuts: boolean; shortcutItems: ShortcutItem[]; browser: string | null; profile: string | null }
+interface AppView { code: string; name: string; types: TypeGroup[]; associated: boolean; shortcutItems: ShortcutItem[]; browser: string | null; profile: string | null }
 interface State {
   apps: AppView[];
   browsers: Browser[];
@@ -73,32 +73,102 @@ function profileSelect(state: State, browserId: string | null, value: string | n
   return select;
 }
 
+/** "3 of 12", or "None": what a closed or open section holds. */
+function countOf(n: number, total: number): string {
+  return n === 0 ? t(lang, 'NONE') : t(lang, 'COUNT_OF', { n: String(n), total: String(total) });
+}
+
+/** "Select all" / "Deselect all", each greyed out when it has nothing to do. */
+function bulkOf(items: { on: boolean }[], set: (on: boolean) => void): HTMLElement | null {
+  if (items.length < 2) return null;
+  const bulk = (label: string, on: boolean) => {
+    const b = el('button', { type: 'button', class: 'link', disabled: items.every((x) => x.on === on) }, label);
+    b.addEventListener('click', () => set(on));
+    return b;
+  };
+  return el('div', { class: 'bulk' }, bulk(t(lang, 'ALL_TYPES'), true), bulk(t(lang, 'NO_TYPES'), false));
+}
+
+/** A Boréal switch: a checkbox with the switch role, its label beside it. */
+function switchOf(checked: boolean, label: string, onChange: (on: boolean) => void): HTMLLabelElement {
+  const input = el('input', { type: 'checkbox', checked, className: 'k-switch' });
+  input.setAttribute('role', 'switch');
+  input.addEventListener('change', () => onChange(input.checked));
+  return el('label', { class: 'k-toggle' }, input, el('span', {}, label));
+}
+
+/** A Boréal checkbox with its label. */
+function tickOf(checked: boolean, label: string, cls: string, onChange: (on: boolean) => void): HTMLLabelElement {
+  const input = el('input', { type: 'checkbox', checked, className: 'k-check' });
+  input.addEventListener('change', () => onChange(input.checked));
+  return el('label', { class: cls }, input, el('span', {}, label));
+}
+
 /**
- * An app's file types, by the facade each opens in, one tick per type. They
- * can be chosen before the app is associated: the switch then applies them.
+ * The app's file types. The switch associates them; the types themselves
+ * are only shown while it is on, by the facade each one opens in.
  */
-function typesOf(app: AppView): HTMLElement {
-  const box = el('div', { class: app.associated ? 'types' : 'types idle', role: 'group', ariaLabel: t(lang, 'TYPES_FOR', { app: app.name }) });
+function filesOf(app: AppView): HTMLElement {
+  const all = app.types.flatMap((g) => g.exts);
+  const head = el('div', { class: 'section-head' },
+    switchOf(app.associated, t(lang, 'ASSOCIATE'), (on) => void run(() => invoke('set_associated', { code: app.code, on }))),
+    el('span', { class: 'count' }, countOf(app.associated ? all.filter((x) => x.on).length : 0, all.length)));
+  const section = el('section', { class: 'section' }, head);
+  if (!app.associated) return section;
+  const body = el('div', { class: 'section-body', role: 'group', ariaLabel: t(lang, 'TYPES_FOR', { app: app.name }) });
   for (const group of app.types) {
     // Extensions are technical: left to right whatever the language.
     const exts = el('span', { class: 'chips', dir: 'ltr' });
     for (const x of group.exts) {
-      const tick = el('input', { type: 'checkbox', checked: x.on });
-      tick.addEventListener('change', () => void run(() => invoke('set_extension', { code: app.code, ext: x.ext, on: tick.checked })));
-      exts.append(el('label', { class: 'chip' }, tick, '.' + x.ext));
+      exts.append(tickOf(x.on, '.' + x.ext, 'chip', (on) => void run(() => invoke('set_extension', { code: app.code, ext: x.ext, on }))));
     }
-    box.append(el('div', { class: 'type-group' }, el('span', { class: 'facade' }, group.facade), exts));
+    body.append(el('div', { class: 'type-group' }, el('span', { class: 'facade' }, group.facade), exts));
   }
-  const all = app.types.flatMap((g) => g.exts);
-  if (all.length > 1) {
-    const bulk = (label: string, on: boolean) => {
-      const b = el('button', { type: 'button', class: 'link', disabled: all.every((x) => x.on === on) }, label);
-      b.addEventListener('click', () => void run(() => invoke('set_extension', { code: app.code, ext: null, on })));
-      return b;
-    };
-    box.append(el('div', { class: 'bulk' }, bulk(t(lang, 'ALL_TYPES'), true), bulk(t(lang, 'NO_TYPES'), false)));
+  const bulk = bulkOf(all, (on) => void run(() => invoke('set_extension', { code: app.code, ext: null, on })));
+  if (bulk) body.append(bulk);
+  section.append(body);
+  return section;
+}
+
+/** Which accordions are open, per app (this window only: a convenience). */
+function isOpen(id: string): boolean {
+  try { return localStorage.getItem('open:' + id) === '1'; } catch { return false; }
+}
+function setOpen(id: string, open: boolean): void {
+  try { localStorage.setItem('open:' + id, open ? '1' : '0'); } catch { /* private storage: stays closed */ }
+}
+
+/**
+ * The app's shortcuts, as an accordion: closed, it says how many are made;
+ * open, one line per shortcut, named as the menu shows it. Ticking one is
+ * what adds the app to the menu.
+ */
+function shortcutsOf(app: AppView, os: string): HTMLElement {
+  const title = t(lang, os === 'macos' ? 'SHORTCUT_ITEMS_MACOS' : os === 'linux' ? 'SHORTCUT_ITEMS_LINUX' : 'SHORTCUT_ITEMS_WINDOWS');
+  const id = 'shortcuts-' + app.code;
+  const open = isOpen(id);
+  const bodyId = 'body-' + id;
+  const toggle = el('button', { type: 'button', class: 'accordion' },
+    el('span', { class: 'accordion-title' }, title),
+    el('span', { class: 'count' }, countOf(app.shortcutItems.filter((i) => i.on).length, app.shortcutItems.length)),
+    el('span', { class: open ? 'chevron open' : 'chevron', ariaHidden: 'true' }));
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.setAttribute('aria-controls', bodyId);
+  toggle.addEventListener('click', () => {
+    setOpen(id, !open);
+    void render();
+  });
+  const section = el('section', { class: 'section' }, el('div', { class: 'section-head' }, toggle));
+  if (!open) return section;
+  const body = el('div', { class: 'section-body shortcut-list', id: bodyId, role: 'group', ariaLabel: title });
+  for (const item of app.shortcutItems) {
+    body.append(tickOf(item.on, item.name, item.key ? 'shortcut' : 'shortcut main',
+      (on) => void run(() => invoke('set_shortcut_item', { code: app.code, key: item.key, on, lang }))));
   }
-  return box;
+  const bulk = bulkOf(app.shortcutItems, (on) => void run(() => invoke('set_shortcut_item', { code: app.code, key: null, on, lang })));
+  if (bulk) body.append(bulk);
+  section.append(body);
+  return section;
 }
 
 /** Icons already asked for, by app code: a re-render reuses them. */
@@ -118,21 +188,6 @@ function iconOf(code: string): HTMLElement {
   return img;
 }
 
-/**
- * Which of the app's shortcuts the menu gets, one per line, named as the menu
- * will show them: the app first, then each facade.
- */
-function shortcutItemsOf(app: AppView, os: string): HTMLElement {
-  const title = t(lang, os === 'macos' ? 'SHORTCUT_ITEMS_MACOS' : os === 'linux' ? 'SHORTCUT_ITEMS_LINUX' : 'SHORTCUT_ITEMS_WINDOWS');
-  const list = el('div', { class: 'shortcut-list', role: 'group', ariaLabel: title }, el('span', { class: 'facade' }, title));
-  for (const item of app.shortcutItems) {
-    const tick = el('input', { type: 'checkbox', checked: item.on });
-    tick.addEventListener('change', () => void run(() => invoke('set_shortcut_item', { code: app.code, key: item.key, on: tick.checked, lang })));
-    list.append(el('label', { class: item.key ? 'shortcut' : 'shortcut main' }, tick, item.name));
-  }
-  return list;
-}
-
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
     await action();
@@ -148,8 +203,8 @@ async function render(): Promise<void> {
 
   root.append(el('h1', {}, 'Kynoko Launcher'), el('p', { class: 'lead' }, t(lang, 'LEAD')));
 
-  root.append(el('h2', {}, t(lang, 'BROWSER_TITLE')));
-  const browserCard = el('div', { class: 'card' });
+  // The default browser: one line, what every app follows unless it has its own.
+  const browserCard = el('div', { class: 'browser-default' });
   browserCard.append(
     el('div', { class: 'field' },
       el('span', {}, t(lang, 'DEFAULT_BROWSER')),
@@ -172,37 +227,56 @@ async function render(): Promise<void> {
   root.append(browserCard);
 
   root.append(el('h2', {}, t(lang, 'APPS_TITLE')));
-  const appsCard = el('div', { class: 'card' });
+  const apps = el('div', { class: 'apps' });
   for (const app of state.apps) {
-    const toggle = el('input', { type: 'checkbox', checked: app.associated });
-    toggle.addEventListener('change', () => void run(() => invoke('set_associated', { code: app.code, on: toggle.checked })));
-    const shortcuts = el('input', { type: 'checkbox', checked: app.shortcuts });
-    shortcuts.addEventListener('change', () => void run(() => invoke('set_shortcuts', { code: app.code, on: shortcuts.checked, lang })));
     // The app itself, icon and name, is what opens it.
     const open = el('button', { type: 'button', class: 'name', ariaLabel: t(lang, 'OPEN_APP', { app: app.name }) },
       iconOf(app.code),
       el('span', { class: 'label' }, el('span', {}, app.name), el('span', { class: 'open' }, t(lang, 'OPEN'))));
     open.addEventListener('click', () => void run(() => invoke('launch', { target: app.code })));
-    // Double-click only means something for an app that opens files.
-    const opensFiles = app.types.length > 0;
-    appsCard.append(
-      el('div', { class: app.code === state.focus ? 'row focus' : 'row', id: 'app-' + app.code },
+
+    // The rest of the header opens the app's settings: closed, it says what
+    // is set; the app a menu entry asked for comes open.
+    const cardId = 'app-' + app.code;
+    const expanded = app.code === state.focus || isOpen(cardId);
+    const typesOn = app.associated ? app.types.flatMap((g) => g.exts).filter((x) => x.on).length : 0;
+    const typesAll = app.types.flatMap((g) => g.exts).length;
+    const summary = [
+      ...(typesAll ? [t(lang, 'SUMMARY_FILES', { count: countOf(typesOn, typesAll) })] : []),
+      t(lang, 'SUMMARY_SHORTCUTS', { count: countOf(app.shortcutItems.filter((i) => i.on).length, app.shortcutItems.length) }),
+    ];
+    const bodyId = 'settings-' + app.code;
+    const expand = el('button', { type: 'button', class: 'expand', ariaLabel: t(lang, 'SETTINGS_FOR', { app: app.name }) },
+      // One line per setting, stacked.
+      el('span', { class: 'summary' }, ...summary.map((line) => el('span', {}, line))),
+      el('span', { class: expanded ? 'chevron open' : 'chevron', ariaHidden: 'true' }));
+    expand.setAttribute('aria-expanded', String(expanded));
+    expand.setAttribute('aria-controls', bodyId);
+    expand.addEventListener('click', () => {
+      setOpen(cardId, !expanded);
+      void render();
+    });
+
+    const card = el('article', { class: app.code === state.focus ? 'app focus' : 'app', id: cardId },
+      el('div', { class: 'app-head' },
         open,
+        // The app's browser, on its line: the choice made most often.
         el('span', { class: 'controls' },
           browserSelect(state, app.browser, t(lang, 'FOLLOW_DEFAULT'), t(lang, 'BROWSER_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_browser', { code: app.code, id }))),
           ...[profileSelect(state, app.browser, app.profile, t(lang, 'PROFILE_FOR', { app: app.name }),
-            (id) => void run(() => invoke('set_app_profile', { code: app.code, id })))].filter((x): x is HTMLSelectElement => !!x),
-          ...(opensFiles ? [el('label', { class: 'switch' }, toggle, t(lang, 'OPEN_FILES'))] : []),
-          el('label', { class: 'switch' }, shortcuts, t(lang, state.os === 'macos' ? 'SHORTCUTS_MACOS' : state.os === 'linux' ? 'SHORTCUTS_LINUX' : 'SHORTCUTS_WINDOWS')),
-        ),
-        ...(opensFiles ? [typesOf(app)] : []),
-        ...(app.shortcuts && app.shortcutItems.length > 1 ? [shortcutItemsOf(app, state.os)] : []),
-      ),
-    );
+            (id) => void run(() => invoke('set_app_profile', { code: app.code, id })))].filter((x): x is HTMLSelectElement => !!x)),
+        expand));
+    if (expanded) {
+      card.append(el('div', { class: 'app-body', id: bodyId },
+        // File types: only for an app that opens files.
+        ...(app.types.length ? [filesOf(app)] : []),
+        ...(app.shortcutItems.length ? [shortcutsOf(app, state.os)] : [])));
+    }
+    apps.append(card);
   }
-  if (state.apps.some((a) => a.types.length)) appsCard.append(el('p', { class: 'note' }, t(lang, 'TYPES_HINT')));
-  root.append(appsCard);
+  root.append(apps);
+  if (state.apps.some((a) => a.associated)) root.append(el('p', { class: 'note' }, t(lang, 'TYPES_HINT')));
 
   if (state.windows) {
     const note = el('p', { class: 'note' }, t(lang, 'DEFAULT_APPS_NOTE'));

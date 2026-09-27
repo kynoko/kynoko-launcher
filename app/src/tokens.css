@@ -19,6 +19,8 @@
   --kynoko-radius: 16px 4px;
   --kynoko-radius-sm: 12px 3px;
   --kynoko-radius-field: 12px;
+  --kynoko-radius-xs: 8px 2px;
+  --kynoko-radius-check: 6px 2px;
   --kynoko-control-height: 41px;
   --kynoko-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --kynoko-danger: #d13a4a;
@@ -38,4 +40,13 @@
     --kynoko-danger: #ff6b78;
     color-scheme: dark;
   }
+}
+
+/* The Boréal facet (ample corners top-start and bottom-end) turns with the
+   writing direction, as in the design system's Arabic. */
+[dir='rtl'] {
+  --kynoko-radius: 4px 16px;
+  --kynoko-radius-sm: 3px 12px;
+  --kynoko-radius-xs: 2px 8px;
+  --kynoko-radius-check: 2px 6px;
 }

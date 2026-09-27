@@ -446,7 +446,7 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
                 shortcut_items: shortcuts::all_items(a, &settings, &lang)
                     .into_iter()
                     .map(|i| ShortcutView {
-                        on: settings.shortcut_chosen(&a.code, &i.key),
+                        on: settings.shortcut_apps.contains(&a.code) && settings.shortcut_chosen(&a.code, &i.key),
                         key: i.key,
                         name: if cfg!(target_os = "macos") { i.short } else { i.name },
                     })
@@ -553,28 +553,42 @@ fn set_extension(shared: tauri::State<'_, Shared>, code: String, ext: Option<Str
     Ok(())
 }
 
-/// Keeps or takes out one menu entry of an app ("" = the app itself, else a
-/// facade path). An app with shortcuts gets them rebuilt at once.
+/// Ticks or unticks one shortcut of an app ("" = the app itself, else a
+/// facade path), or all of them (`key` None). There is no separate switch:
+/// an app has shortcuts as long as one is ticked, so ticking the first one
+/// of an app without any starts from none, and unticking the last one
+/// removes the app's shortcuts. They are rebuilt at once.
 #[tauri::command]
-fn set_shortcut_item(shared: tauri::State<'_, Shared>, code: String, key: String, on: bool, lang: String) -> Result<(), String> {
+fn set_shortcut_item(shared: tauri::State<'_, Shared>, code: String, key: Option<String>, on: bool, lang: String) -> Result<(), String> {
     let catalogue = shared.catalogue();
     let app = catalogue.app(&code).ok_or("unknown app")?;
-    if !key.is_empty() && !app.facades.iter().any(|f| f.path == key) {
-        return Err("unknown facade".into());
-    }
     let mut settings = Settings::load();
-    let excluded = settings.excluded_shortcuts.entry(code.clone()).or_default();
-    excluded.retain(|k| k != &key);
+    let keys: Vec<String> = shortcuts::all_items(app, &settings, &lang).into_iter().map(|i| i.key).collect();
+    let targets = match key {
+        Some(k) if keys.contains(&k) => vec![k],
+        Some(_) => return Err("unknown shortcut".into()),
+        None => keys.clone(),
+    };
+    let had = settings.shortcut_apps.contains(&code);
+    let mut excluded: Vec<String> =
+        if had { settings.excluded_shortcuts.get(&code).cloned().unwrap_or_default() } else { keys.clone() };
+    excluded.retain(|k| !targets.contains(k));
     if !on {
-        excluded.push(key);
+        excluded.extend(targets);
     }
-    if settings.excluded_shortcuts.get(&code).is_some_and(|x| x.is_empty()) {
-        settings.excluded_shortcuts.remove(&code);
+    let any = keys.iter().any(|k| !excluded.contains(k));
+    settings.excluded_shortcuts.remove(&code);
+    settings.shortcut_apps.retain(|c| c != &code);
+    if any {
+        if !excluded.is_empty() {
+            settings.excluded_shortcuts.insert(code.clone(), excluded);
+        }
+        settings.shortcut_apps.push(code.clone());
     }
     settings.save().map_err(|e| e.to_string())?;
-    if settings.shortcut_apps.contains(&code) {
-        let mut inventory = Inventory::load();
-        shortcuts::remove(app, &lang, &mut inventory).map_err(|e| e.to_string())?;
+    let mut inventory = Inventory::load();
+    shortcuts::remove(app, &lang, &mut inventory).map_err(|e| e.to_string())?;
+    if any {
         shortcuts::create(app, &settings, &lang, &mut inventory).map_err(|e| e.to_string())?;
     }
     Ok(())

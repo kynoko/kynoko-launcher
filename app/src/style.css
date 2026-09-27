@@ -21,88 +21,186 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
   padding: 14px 16px;
 }
 
-.row {
+/* One card per app: the Boréal fieldset's facet, surface and glow. */
+.apps { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px 14px; }
+/* Every card shares the list's columns (name | browser | summary), so the
+   browsers line up from one app to the next. */
+.app {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px 16px;
-  align-items: center;
-  padding-block: 12px;
-  border-block-end: 1px solid var(--kynoko-hairline);
+  grid-template-columns: subgrid;
+  gap: 10px 14px;
+  padding-block: 12px 14px;
+  padding-inline: 16px;
+  border: 1px solid var(--kynoko-hairline);
+  border-radius: var(--kynoko-radius);
+  background: var(--kynoko-surface);
+  box-shadow: var(--kynoko-shadow-soft);
+  transition: border-color 0.2s var(--kynoko-ease), box-shadow 0.2s var(--kynoko-ease);
 }
-.row:last-child { border-block-end: 0; }
+.app:focus-within { border-color: rgba(var(--kynoko-glow-rgb), 0.45); }
 /* The app the user came from (its menu entry), put forward. */
-.row.focus {
-  margin-inline: -10px;
-  padding-inline: 10px;
-  border-radius: var(--kynoko-radius-sm);
-  background: rgba(var(--kynoko-glow-rgb), 0.1);
-  outline: 1px solid rgba(var(--kynoko-glow-rgb), 0.45);
+.app.focus {
+  border-color: rgba(var(--kynoko-glow-rgb), 0.6);
+  box-shadow: 0 0 0 4px rgba(var(--kynoko-glow-rgb), 0.14), var(--kynoko-shadow-soft);
 }
+.app-head { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
+.app-head button.name { justify-self: start; }
+/* On the app's line the browser choice is narrower, so that the line holds
+   the name, the choice and the summary together. */
+.app-head select { inline-size: 200px; max-inline-size: 100%; text-overflow: ellipsis; }
+.app-head .summary { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.35; white-space: nowrap; }
+/* The rest of the header: what is set, and the chevron. */
+button.expand {
+  justify-self: end; display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  min-block-size: 44px; padding: 0; border: 0; background: none; text-align: end;
+  color: var(--kynoko-hint); font-weight: 500; font-size: 0.82rem;
+}
+button.expand:hover { color: var(--kynoko-primary); }
+.app-body { grid-column: 1 / -1; display: grid; gap: 2px; margin-block-start: 4px; }
+/* The default browser: a line of its own above the apps, not a card. */
+.browser-default { margin-block-start: 22px; }
+.browser-default .field { font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* The app's icon and name: the button that opens it. */
 button.name {
-  justify-self: start;
   display: inline-flex; align-items: center; gap: 10px;
-  min-block-size: 40px; padding-block: 4px; padding-inline: 6px 12px; margin-inline-start: -6px;
-  border: 1px solid transparent; background: none;
+  min-block-size: 44px; padding-block: 4px; padding-inline: 6px 12px; margin-inline-start: -6px;
+  border: 1px solid transparent; border-radius: var(--kynoko-radius-sm); background: none;
   font-weight: 650; text-align: start;
 }
 button.name .label { display: flex; flex-direction: column; line-height: 1.2; white-space: nowrap; }
 button.name .open { font-size: 0.78rem; font-weight: 600; color: var(--kynoko-primary); }
-button.name:hover { border-color: var(--kynoko-hairline); background: rgba(var(--kynoko-glow-rgb), 0.08); color: var(--kynoko-primary); }
-.app-icon { inline-size: 28px; block-size: 28px; border-radius: 7px; flex: none; }
-/* The app's file types, by facade: one tick per type. */
-.row .types { grid-column: 1 / -1; display: grid; gap: 6px; font-size: 0.82rem; }
-.row .types.idle { opacity: 0.6; }
-.type-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.type-group .facade { color: var(--kynoko-hint); min-inline-size: 9em; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
-label.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-block: 1px;
-  padding-inline: 4px 8px;
-  border: 1px solid var(--kynoko-hairline);
-  border-radius: 999px;
-  cursor: pointer;
+button.name:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.3); background: rgba(var(--kynoko-glow-rgb), 0.08); color: var(--kynoko-primary); }
+.app-icon { inline-size: 32px; block-size: 32px; border-radius: var(--kynoko-radius-xs); flex: none; }
+
+/* A section of the card: its own line; its content in a tinted, faceted body. */
+.section { border-block-start: 1px solid var(--kynoko-hairline); margin-block-start: 10px; padding-block-start: 10px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-block-size: 36px; }
+.count {
+  flex: none; white-space: nowrap;
+  font-size: 0.78rem; font-weight: 650; color: var(--kynoko-primary);
+  padding-block: 2px; padding-inline: 9px;
+  border-radius: var(--kynoko-radius-sm);
+  background: rgba(var(--kynoko-glow-rgb), 0.12);
 }
+.section-body {
+  display: grid; gap: 8px; margin-block-start: 8px;
+  padding-block: 10px; padding-inline: 12px;
+  border: 1px solid rgba(var(--kynoko-glow-rgb), 0.18);
+  border-radius: var(--kynoko-radius-sm);
+  background: rgba(var(--kynoko-glow-rgb), 0.04);
+  font-size: 0.86rem;
+}
+
+/* The accordion's header: the whole line is the button. */
+button.accordion {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  min-block-size: 36px; padding: 0; border: 0; background: none; text-align: start;
+}
+button.accordion:hover .accordion-title { color: var(--kynoko-primary); }
+.accordion-title { flex: 1; }
+/* A chevron drawn with two borders: it points down (closed) or up (open),
+   which is vertical, so the same in both writing directions. */
+.chevron {
+  flex: none; inline-size: 8px; block-size: 8px; margin-block: -4px 0; margin-inline: 4px 6px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); opacity: 0.55;
+  transition: transform 0.2s var(--kynoko-ease), margin 0.2s var(--kynoko-ease);
+}
+.chevron.open { transform: rotate(225deg); margin-block: 4px 0; }
+
+/* The switch, after the apps' ion-toggle: a track and a knob. */
+label.k-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; }
+input.k-switch {
+  appearance: none; position: relative; flex: none; margin: 0; cursor: pointer;
+  inline-size: 40px; block-size: 24px; border-radius: 999px;
+  background: var(--kynoko-hairline-strong);
+  transition: background 0.2s var(--kynoko-ease);
+}
+input.k-switch::before {
+  content: ''; position: absolute; inset-block-start: 3px; inset-inline-start: 3px;
+  inline-size: 18px; block-size: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: inset-inline-start 0.2s var(--kynoko-ease);
+}
+input.k-switch:checked { background: var(--kynoko-brand-gradient); }
+input.k-switch:checked::before { inset-inline-start: 19px; }
+
+/* The checkbox, faceted like the design system's fields. */
+input.k-check {
+  appearance: none; display: grid; place-items: center; flex: none; margin: 0; cursor: pointer;
+  inline-size: 17px; block-size: 17px;
+  border: 1.5px solid var(--kynoko-hairline-strong); border-radius: var(--kynoko-radius-check);
+  background: var(--kynoko-window);
+  transition: background 0.15s var(--kynoko-ease), border-color 0.15s var(--kynoko-ease);
+}
+input.k-check:hover { border-color: var(--kynoko-primary); }
+input.k-check:checked { background: var(--kynoko-brand-gradient); border-color: transparent; }
+/* The tick: a check mark is not mirrored in right-to-left scripts. */
+input.k-check:checked::after {
+  content: ''; inline-size: 4px; block-size: 8px; margin-block-start: -2px;
+  border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(45deg);
+}
+
+/* File types, by the facade each opens in. */
+.type-group { display: grid; grid-template-columns: minmax(8em, max-content) 1fr; align-items: start; gap: 4px 12px; }
+.type-group .facade { color: var(--kynoko-hint); padding-block-start: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px 6px; }
+label.chip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding-block: 2px; padding-inline: 5px 9px;
+  border: 1px solid var(--kynoko-hairline); border-radius: var(--kynoko-radius-xs);
+  background: var(--kynoko-window);
+}
+label.chip:has(input:checked) { border-color: rgba(var(--kynoko-glow-rgb), 0.35); }
 label.chip:has(input:not(:checked)) { color: var(--kynoko-hint); text-decoration: line-through; }
-label.chip input { margin: 0; }
-/* The app's shortcuts: one per line, named as the menu shows them. */
-.shortcut-list { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; font-size: 0.86rem; }
-.shortcut-list .facade { color: var(--kynoko-hint); margin-block-end: 2px; }
-label.shortcut { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding-inline-start: 4px; }
+
+/* Shortcuts: one per line, named as the menu shows them. */
+.shortcut-list { gap: 6px; }
+label.shortcut { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; justify-self: start; }
 label.shortcut.main { font-weight: 650; }
 label.shortcut:has(input:not(:checked)) { color: var(--kynoko-hint); }
-.types .bulk { display: flex; gap: 12px; }
+
+.bulk { display: flex; gap: 14px; margin-block-start: 2px; }
 button.link {
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--kynoko-primary);
-  font-weight: 600;
-  font-size: inherit;
+  min-block-size: 0; padding: 0; border: 0; background: none;
+  color: var(--kynoko-primary); font-weight: 600; font-size: inherit;
 }
 button.link:disabled { color: var(--kynoko-hint); cursor: default; }
-.row .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 
 select, button {
   font: inherit;
-  min-block-size: 34px;
-  border-radius: var(--kynoko-radius-field);
-  border: 1px solid var(--kynoko-hairline-strong);
+  min-block-size: 38px;
+  border-radius: var(--kynoko-radius-sm);
+  border: 1px solid rgba(var(--kynoko-glow-rgb), 0.28);
   background: var(--kynoko-window);
   color: var(--kynoko-text);
-  padding-inline: 12px;
+  padding-inline: 14px;
+  transition: border-color 0.2s var(--kynoko-ease), box-shadow 0.2s var(--kynoko-ease);
 }
-button { cursor: pointer; font-weight: 600; transition: border-color 0.15s var(--kynoko-ease); }
-button:hover { border-color: var(--kynoko-primary); }
+select:hover, button:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.55); }
+select:focus-visible, button:focus-visible {
+  outline: none;
+  border-color: rgb(var(--kynoko-glow-rgb));
+  box-shadow: 0 0 0 4px rgba(var(--kynoko-glow-rgb), 0.15);
+}
+/* The select's own arrow, drawn like the design system's (a chevron), at the
+   end of the field in either writing direction. */
+select {
+  appearance: none;
+  padding-inline-end: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%236366f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+}
+[dir='rtl'] select { background-position: left 13px center; }
+button { cursor: pointer; font-weight: 600; }
 button.primary { background: var(--kynoko-brand-gradient); color: #fff; border: 0; }
 button.danger { color: var(--kynoko-danger); }
 :focus-visible { outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
-
-label.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-visible, button.link:focus-visible { box-shadow: none; outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
 
 .field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
