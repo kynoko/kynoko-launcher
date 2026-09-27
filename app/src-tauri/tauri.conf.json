@@ -38,6 +38,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
+        "languages": ["French", "English", "Spanish", "Japanese", "SimpChinese", "TradChinese", "Arabic"],
         "installerHooks": "windows/hooks.nsh"
       }
     },

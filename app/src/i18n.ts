@@ -6,7 +6,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS'
-  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
+  | 'APPS_TITLE' | 'OPEN_FILES' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUTS' | 'OPEN_APP' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
 >;
@@ -23,6 +23,8 @@ const FR: Dict = {
   APPS_TITLE: 'Applications',
   OPEN_FILES: 'Ouvrir leurs fichiers',
   TYPES_FOR: "Types de fichiers de {{app}}",
+  ALL_TYPES: "Tout sélectionner",
+  NO_TYPES: "Tout désélectionner",
   TYPES_HINT: "Décochez un type pour le laisser à votre programme habituel.",
   SHORTCUTS: 'Raccourcis',
   OPEN_APP: 'Ouvrir',
@@ -50,6 +52,8 @@ const EN: Dict = {
   APPS_TITLE: 'Apps',
   OPEN_FILES: 'Open their files',
   TYPES_FOR: "File types of {{app}}",
+  ALL_TYPES: "Select all",
+  NO_TYPES: "Deselect all",
   TYPES_HINT: "Untick a type to leave it to your usual program.",
   SHORTCUTS: 'Shortcuts',
   OPEN_APP: 'Open',
@@ -77,6 +81,8 @@ const ES: Dict = {
   APPS_TITLE: 'Aplicaciones',
   OPEN_FILES: 'Abrir sus archivos',
   TYPES_FOR: "Tipos de archivo de {{app}}",
+  ALL_TYPES: "Seleccionar todo",
+  NO_TYPES: "Deseleccionar todo",
   TYPES_HINT: "Desmarque un tipo para dejarlo a su programa habitual.",
   SHORTCUTS: 'Accesos directos',
   OPEN_APP: 'Abrir',
@@ -104,6 +110,8 @@ const JA: Dict = {
   APPS_TITLE: 'アプリ',
   OPEN_FILES: 'ファイルを開く',
   TYPES_FOR: "{{app}} のファイルの種類",
+  ALL_TYPES: "すべて選択",
+  NO_TYPES: "すべて選択解除",
   TYPES_HINT: "チェックを外した種類は、いつものプログラムで開かれます。",
   SHORTCUTS: 'ショートカット',
   OPEN_APP: '開く',
@@ -131,6 +139,8 @@ const ZH_HANS: Dict = {
   APPS_TITLE: '应用',
   OPEN_FILES: '打开其文件',
   TYPES_FOR: "{{app}} 的文件类型",
+  ALL_TYPES: "全选",
+  NO_TYPES: "全部取消",
   TYPES_HINT: "取消勾选某个类型，即交还给您常用的程序打开。",
   SHORTCUTS: '快捷方式',
   OPEN_APP: '打开',
@@ -158,6 +168,8 @@ const ZH_HANT: Dict = {
   APPS_TITLE: '應用程式',
   OPEN_FILES: '開啟其檔案',
   TYPES_FOR: "{{app}} 的檔案類型",
+  ALL_TYPES: "全選",
+  NO_TYPES: "全部取消",
   TYPES_HINT: "取消勾選某個類型，即交還給您慣用的程式開啟。",
   SHORTCUTS: '捷徑',
   OPEN_APP: '開啟',
@@ -185,6 +197,8 @@ const AR: Dict = {
   APPS_TITLE: 'التطبيقات',
   OPEN_FILES: 'فتح ملفاتها',
   TYPES_FOR: "أنواع ملفات {{app}}",
+  ALL_TYPES: "تحديد الكل",
+  NO_TYPES: "إلغاء تحديد الكل",
   TYPES_HINT: "ألغِ تحديد نوع ليبقى مع برنامجك المعتاد.",
   SHORTCUTS: 'اختصارات',
   OPEN_APP: 'فتح',

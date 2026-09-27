@@ -138,6 +138,18 @@ impl Inventory {
     }
 }
 
+/// Uninstalled with "delete the application data" left unticked: the
+/// system artefacts are gone (the cleanup took them), the user's choices stay
+/// for a reinstall, marked as not applied so that its first start applies them.
+pub fn remove_state_keeping_preferences() {
+    let _ = fs::remove_file(dir().join("inventory.json"));
+    let _ = fs::remove_file(dir().join("catalogue.json"));
+    let _ = fs::remove_dir(dir().join("icons"));
+    let mut settings = Settings::load();
+    settings.registered_by = None;
+    let _ = settings.save();
+}
+
 /// Removes the launcher's own state (settings and inventory). Last step of
 /// the cleanup, once every artefact is gone.
 pub fn remove_own_state() {

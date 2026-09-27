@@ -11,6 +11,7 @@ interface State {
   browsers: Browser[];
   defaultBrowser: string | null;
   defaultProfile: string | null;
+  version: string;
   catalogueDate: string;
   catalogueChecked: number | null;
   catalogueError: string | null;
@@ -73,6 +74,15 @@ function typesOf(app: AppView): HTMLElement {
       exts.append(el('label', { class: 'chip' }, tick, '.' + x.ext));
     }
     box.append(el('div', { class: 'type-group' }, el('span', { class: 'facade' }, group.facade), exts));
+  }
+  const all = app.types.flatMap((g) => g.exts);
+  if (all.length > 1) {
+    const bulk = (label: string, on: boolean) => {
+      const b = el('button', { type: 'button', class: 'link', disabled: all.every((x) => x.on === on) }, label);
+      b.addEventListener('click', () => void run(() => invoke('set_extension', { code: app.code, ext: null, on })));
+      return b;
+    };
+    box.append(el('div', { class: 'bulk' }, bulk(t(lang, 'ALL_TYPES'), true), bulk(t(lang, 'NO_TYPES'), false)));
   }
   return box;
 }
@@ -152,7 +162,7 @@ async function render(): Promise<void> {
   const date = new Date(state.catalogueDate);
   const check = el('button', { type: 'button' }, t(lang, 'CHECK_NOW'));
   check.addEventListener('click', () => void run(() => invoke('check_catalogue')));
-  const status = el('span', { class: 'note' }, t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) }));
+  const status = el('span', { class: 'note' }, `Kynoko Launcher ${state.version} · ${t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) })}`);
   const foot = el('div', { class: 'foot' }, el('span', { class: 'field' }, status, check), remove);
   root.append(foot);
   // A failure is said here, quietly, with the last success: never a notification.

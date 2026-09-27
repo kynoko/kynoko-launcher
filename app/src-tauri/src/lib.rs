@@ -54,7 +54,9 @@ enum Command {
     /// when it named one.
     Open(Option<String>, Vec<PathBuf>),
     Launch(String),
-    Cleanup,
+    /// Takes away everything written to the system; `--keep-preferences`
+    /// leaves the user's choices, which a reinstall then applies again.
+    Cleanup { keep_preferences: bool },
 }
 
 fn parse(args: &[String]) -> Command {
@@ -64,7 +66,7 @@ fn parse(args: &[String]) -> Command {
             _ => Command::Open(None, args[1..].iter().map(PathBuf::from).collect()),
         },
         Some("launch") => Command::Launch(args.get(1).cloned().unwrap_or_default()),
-        Some("cleanup") => Command::Cleanup,
+        Some("cleanup") => Command::Cleanup { keep_preferences: args.get(1).is_some_and(|a| a == "--keep-preferences") },
         Some(url) if url.starts_with(&format!("{}:", assoc::SCHEME)) => Command::Window(app_param(url)),
         _ => Command::Window(None),
     }
@@ -172,10 +174,14 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     launch::open(&url, browser_by_id(settings.browser_for(code)).as_ref(), profile.as_deref()).map_err(|e| e.to_string())
 }
 
-fn cleanup() -> Result<(), String> {
+fn cleanup(keep_preferences: bool) -> Result<(), String> {
     let mut inventory = Inventory::load();
     assoc::remove_all(&mut inventory).map_err(|e| e.to_string())?;
-    settings::remove_own_state();
+    if keep_preferences {
+        settings::remove_state_keeping_preferences();
+    } else {
+        settings::remove_own_state();
+    }
     Ok(())
 }
 
@@ -195,8 +201,8 @@ fn dispatch(app: &AppHandle, command: Command) {
         }
         Command::Open(named, files) => open_files(&shared, named.as_deref(), &files),
         Command::Launch(target) => launch_app(&shared, &target),
-        Command::Cleanup => {
-            let r = cleanup();
+        Command::Cleanup { keep_preferences } => {
+            let r = cleanup(keep_preferences);
             app.exit(if r.is_ok() { 0 } else { 1 });
             r
         }
@@ -244,6 +250,8 @@ struct StateView {
     browsers: Vec<browsers::Browser>,
     default_browser: Option<String>,
     default_profile: Option<String>,
+    /// The launcher's own version.
+    version: String,
     catalogue_date: String,
     /// Last successful check of the online catalogue (Unix seconds), if any.
     catalogue_checked: Option<u64>,
@@ -284,7 +292,7 @@ fn type_groups(app: &catalogue::App, settings: &Settings, lang: &str) -> Vec<Typ
 }
 
 #[tauri::command]
-fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
+fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> StateView {
     let mut settings = Settings::load();
     // The window's language: what shortcuts are named in when the catalogue
     // later renames them in the background.
@@ -311,6 +319,7 @@ fn get_state(shared: tauri::State<'_, Shared>, lang: String) -> StateView {
         browsers: browsers::installed(),
         default_browser: settings.default_browser.clone(),
         default_profile: settings.default_profile.clone(),
+        version: app.package_info().version.to_string(),
         catalogue_date: catalogue.generated_at.clone(),
         catalogue_checked: cache.success_at,
         catalogue_error: cache.last_error.clone(),
@@ -374,20 +383,23 @@ fn set_associated(shared: tauri::State<'_, Shared>, code: String, on: bool) -> R
     settings.save().map_err(|e| e.to_string())
 }
 
-/// Keeps or takes out one file type of an app. An associated app is
+/// Keeps or takes out file types of an app: one (`ext`), or all of them
+/// (`ext` = None, "select all" / "deselect all"). An associated app is
 /// registered again at once, with its new set of types.
 #[tauri::command]
-fn set_extension(shared: tauri::State<'_, Shared>, code: String, ext: String, on: bool) -> Result<(), String> {
+fn set_extension(shared: tauri::State<'_, Shared>, code: String, ext: Option<String>, on: bool) -> Result<(), String> {
     let catalogue = shared.catalogue();
     let app = catalogue.app(&code).ok_or("unknown app")?;
-    if !app.extensions().contains(&ext) {
-        return Err("unknown file type".into());
-    }
+    let exts = match ext {
+        Some(ext) if app.extensions().contains(&ext) => vec![ext],
+        Some(_) => return Err("unknown file type".into()),
+        None => app.extensions(),
+    };
     let mut settings = Settings::load();
     let excluded = settings.excluded_exts.entry(code.clone()).or_default();
-    excluded.retain(|e| e != &ext);
+    excluded.retain(|e| !exts.contains(e));
     if !on {
-        excluded.push(ext);
+        excluded.extend(exts);
     }
     if settings.excluded_exts.get(&code).is_some_and(|x| x.is_empty()) {
         settings.excluded_exts.remove(&code);
@@ -493,9 +505,10 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
 /// The online catalogue, in the background: when due (12 h after the last
 /// success, sooner after a failure), after a random delay so that machines
 /// started together do not all ask together.
-/// After an update, the associations are written again by the new version:
-/// an older one may have written other names, icons or commands. Once per
-/// version, in the background.
+/// After an update, the associations and shortcuts are written again by the
+/// new version: an older one may have written other names, icons or
+/// commands. After a reinstall that kept the preferences, this is what puts
+/// them back. Once per version, in the background.
 fn refresh_registrations(app: &AppHandle) {
     let version = app.package_info().version.to_string();
     if Settings::load().registered_by.as_deref() == Some(version.as_str()) {
@@ -509,6 +522,13 @@ fn refresh_registrations(app: &AppHandle) {
             if let Some(app) = catalogue.app(&code) {
                 let _ = assoc::unregister(app, &mut inventory);
                 let _ = assoc::register(&settings.chosen(app), &settings, &mut inventory);
+            }
+        }
+        let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
+        for code in settings.shortcut_apps.clone() {
+            if let Some(app) = catalogue.app(&code) {
+                let _ = shortcuts::remove(app, &lang, &mut inventory);
+                let _ = shortcuts::create(app, &settings, &lang, &mut inventory);
             }
         }
         // Read again: the window may have changed a setting meanwhile.
@@ -541,7 +561,7 @@ fn launch(shared: tauri::State<'_, Shared>, target: String) -> Result<(), String
 
 #[tauri::command]
 fn remove_everything() -> Result<(), String> {
-    cleanup()
+    cleanup(false)
 }
 
 /// Windows: the Default apps page, on the launcher's own entry.
@@ -579,7 +599,7 @@ pub fn run() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let first = parse(&args);
     let show_window = matches!(first, Command::Window(_));
-    let cleaning = matches!(first, Command::Cleanup);
+    let cleaning = matches!(first, Command::Cleanup { .. });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -676,6 +696,13 @@ mod tests {
         assert_eq!(app_param("kynoko-launcher://settings?app=../../evil"), None);
         assert_eq!(app_param("kynoko-launcher://settings"), None);
         assert!(matches!(parse(&["kynoko-launcher://settings?app=Office".into()]), Command::Window(Some(_))));
+    }
+
+    #[test]
+    fn cleanup_arguments() {
+        let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(matches!(parse(&args(&["cleanup"])), Command::Cleanup { keep_preferences: false }));
+        assert!(matches!(parse(&args(&["cleanup", "--keep-preferences"])), Command::Cleanup { keep_preferences: true }));
     }
 
     #[test]

@@ -57,6 +57,17 @@ label.chip {
 }
 label.chip:has(input:not(:checked)) { color: var(--kynoko-hint); text-decoration: line-through; }
 label.chip input { margin: 0; }
+.types .bulk { display: flex; gap: 12px; }
+button.link {
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--kynoko-primary);
+  font-weight: 600;
+  font-size: inherit;
+}
+button.link:disabled { color: var(--kynoko-hint); cursor: default; }
 .row .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 
 select, button {
