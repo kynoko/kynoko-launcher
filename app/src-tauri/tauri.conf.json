@@ -38,6 +38,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
+        "template": "windows/installer.nsi",
         "languages": ["French", "English", "Spanish", "Japanese", "SimpChinese", "TradChinese", "Arabic"],
         "customLanguageFiles": {
           "French": "windows/lang/French.nsh",
