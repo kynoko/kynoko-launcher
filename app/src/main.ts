@@ -16,6 +16,8 @@ interface State {
   catalogueChecked: number | null;
   catalogueError: string | null;
   windows: boolean;
+  /** 'windows', 'macos' or 'linux': where shortcuts go is named after it. */
+  os: string;
   /** The app a `kynoko-launcher://settings?app=` link asked for. */
   focus: string | null;
 }
@@ -134,7 +136,7 @@ async function render(): Promise<void> {
           ...[profileSelect(state, app.browser, app.profile, t(lang, 'PROFILE_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_profile', { code: app.code, id })))].filter((x): x is HTMLSelectElement => !!x),
           el('label', { class: 'switch' }, toggle, t(lang, 'OPEN_FILES')),
-          el('label', { class: 'switch' }, shortcuts, t(lang, 'SHORTCUTS')),
+          el('label', { class: 'switch' }, shortcuts, t(lang, state.os === 'macos' ? 'SHORTCUTS_MACOS' : state.os === 'linux' ? 'SHORTCUTS_LINUX' : 'SHORTCUTS_WINDOWS')),
           open,
         ),
         typesOf(app),

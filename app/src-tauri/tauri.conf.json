@@ -39,6 +39,15 @@
       "nsis": {
         "installMode": "currentUser",
         "languages": ["French", "English", "Spanish", "Japanese", "SimpChinese", "TradChinese", "Arabic"],
+        "customLanguageFiles": {
+          "French": "windows/lang/French.nsh",
+          "English": "windows/lang/English.nsh",
+          "Spanish": "windows/lang/Spanish.nsh",
+          "Japanese": "windows/lang/Japanese.nsh",
+          "SimpChinese": "windows/lang/SimpChinese.nsh",
+          "TradChinese": "windows/lang/TradChinese.nsh",
+          "Arabic": "windows/lang/Arabic.nsh"
+        },
         "installerHooks": "windows/hooks.nsh"
       }
     },

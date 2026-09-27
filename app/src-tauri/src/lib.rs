@@ -258,6 +258,7 @@ struct StateView {
     /// Why the last check failed, while it keeps failing.
     catalogue_error: Option<String>,
     windows: bool,
+    os: String,
     /// The app to put forward, once.
     focus: Option<String>,
 }
@@ -324,6 +325,7 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         catalogue_checked: cache.success_at,
         catalogue_error: cache.last_error.clone(),
         windows: cfg!(windows),
+        os: std::env::consts::OS.to_string(),
         focus: shared.focus.lock().expect("lock").take(),
     }
 }
