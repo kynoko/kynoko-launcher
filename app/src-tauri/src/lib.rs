@@ -56,6 +56,9 @@ const FLUSH_GRACE: Duration = Duration::from_secs(40);
 /// sign-in page, a payment page, an error page; a window must always be
 /// movable and closable.
 const TITLE_BAR_GRACE: Duration = Duration::from_millis(2500);
+/// How long the window uses an app's kept icon before asking whether it
+/// changed (a conditional request: nothing is downloaded when it did not).
+const ICON_RECHECK: Duration = Duration::from_secs(3600);
 
 /// Added to every app address the launcher opens: the app then knows the
 /// launcher is installed for this browser, and its menu entry opens it
@@ -933,7 +936,8 @@ fn watch_catalogue(app: AppHandle) {
 }
 
 /// An app's icon for the window, as a data: URL (the window's CSP loads
-/// nothing remote). From the app's web manifest, kept a week on disk.
+/// nothing remote). From the app's web manifest, kept on disk and checked
+/// again after ICON_RECHECK (see shortcuts::kept_icon).
 #[tauri::command]
 async fn app_icon(shared: tauri::State<'_, Shared>, code: String) -> Result<Option<String>, String> {
     if !plain_code(&code) {
@@ -943,27 +947,9 @@ async fn app_icon(shared: tauri::State<'_, Shared>, code: String) -> Result<Opti
     let Some(app) = catalogue.app(&code) else { return Ok(None) };
     let manifest = format!("{}/manifest.webmanifest", Settings::load().url_of(app).trim_end_matches('/'));
     let path = settings::dir().join(settings::UI_ICONS).join(format!("{code}.png"));
-    let png = tauri::async_runtime::spawn_blocking(move || {
-        let fresh = std::fs::metadata(&path)
-            .and_then(|m| m.modified())
-            .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < Duration::from_secs(7 * 24 * 3600)));
-        if fresh {
-            if let Ok(bytes) = std::fs::read(&path) {
-                return Some(bytes);
-            }
-        }
-        match shortcuts::fetch_icon(&manifest) {
-            Ok(bytes) => {
-                let _ = std::fs::create_dir_all(path.parent().expect("has a parent"));
-                let _ = std::fs::write(&path, &bytes);
-                Some(bytes)
-            }
-            // Offline: last week's copy is better than none.
-            Err(_) => std::fs::read(&path).ok(),
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let png = tauri::async_runtime::spawn_blocking(move || shortcuts::kept_icon(&manifest, &path, ICON_RECHECK))
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(png.filter(|b| b.starts_with(b"\x89PNG")).map(|b| format!("data:image/png;base64,{}", base64(&b))))
 }
 

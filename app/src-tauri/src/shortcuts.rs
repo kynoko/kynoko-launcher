@@ -43,9 +43,25 @@ fn resolve(manifest_url: &str, src: &str) -> String {
     }
 }
 
+fn agent() -> ureq::Agent {
+    ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(10)).build()
+}
+
+fn body(response: ureq::Response) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::new();
+    response.into_reader().read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
 /// The largest PNG "any" icon a web manifest declares, downloaded.
 pub(crate) fn fetch_icon(manifest_url: &str) -> Result<Vec<u8>, String> {
-    let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(10)).build();
+    let agent = agent();
+    let src = icon_src(&agent, manifest_url)?;
+    body(agent.get(&src).call().map_err(|e| e.to_string())?)
+}
+
+/// The address of the largest PNG "any" icon a web manifest declares.
+fn icon_src(agent: &ureq::Agent, manifest_url: &str) -> Result<String, String> {
     let manifest: serde_json::Value = agent
         .get(manifest_url)
         .call()
@@ -64,15 +80,62 @@ pub(crate) fn fetch_icon(manifest_url: &str) -> Result<Vec<u8>, String> {
         .and_then(|i| i["src"].as_str())
         .ok_or("no icon")?
         .to_string();
-    let mut bytes = Vec::new();
-    agent
-        .get(&resolve(manifest_url, &best))
-        .call()
-        .map_err(|e| e.to_string())?
-        .into_reader()
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    Ok(bytes)
+    Ok(resolve(manifest_url, &best))
+}
+
+/// What tells a kept icon's version (`<icon>.json` beside it): its address
+/// and the validators its server gave.
+#[derive(Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IconVersion {
+    src: String,
+    etag: Option<String>,
+    last_modified: Option<String>,
+}
+
+/// A manifest's icon kept at `path`, used as is when checked less than
+/// `recheck` ago. Older, it is asked for again with what tells its version:
+/// unchanged, the server says so (304) and nothing is downloaded; changed,
+/// the new one replaces it (an app's new icon shows within `recheck`).
+/// Offline, or given something that is not a PNG, the kept one serves.
+pub(crate) fn kept_icon(manifest_url: &str, path: &Path, recheck: std::time::Duration) -> Option<Vec<u8>> {
+    let kept = std::fs::read(path).ok();
+    let checked = std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+    if kept.is_some() && checked.is_some_and(|age| age < recheck) {
+        return kept;
+    }
+    let version_path = path.with_extension("json");
+    let agent = agent();
+    let Ok(src) = icon_src(&agent, manifest_url) else { return kept };
+    let mut request = agent.get(&src);
+    let known = std::fs::read_to_string(&version_path).ok().and_then(|s| serde_json::from_str::<IconVersion>(&s).ok());
+    if let (Some(_), Some(known)) = (&kept, known.filter(|k| k.src == src)) {
+        if let Some(etag) = &known.etag {
+            request = request.set("If-None-Match", etag);
+        }
+        if let Some(date) = &known.last_modified {
+            request = request.set("If-Modified-Since", date);
+        }
+    }
+    let Ok(response) = request.call() else { return kept };
+    if response.status() == 304 {
+        // Unchanged: checked now.
+        let _ = std::fs::File::options().write(true).open(path).and_then(|f| f.set_modified(std::time::SystemTime::now()));
+        return kept;
+    }
+    let version = IconVersion {
+        src,
+        etag: response.header("ETag").map(str::to_string),
+        last_modified: response.header("Last-Modified").map(str::to_string),
+    };
+    let fresh = body(response).ok().filter(|b| b.starts_with(b"\x89PNG"));
+    let Some(bytes) = fresh else { return kept };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(path, &bytes);
+    let _ = std::fs::write(&version_path, serde_json::to_string(&version).unwrap_or_default());
+    Some(bytes)
 }
 
 /// A PNG turned into an .ico holding 256, 48, 32 and 16 pixel frames (each
@@ -402,6 +465,58 @@ mod tests {
         assert_eq!(resolve(m, "/assets/images/x.png"), "https://app.example/assets/images/x.png");
         assert_eq!(resolve(m, "x.png"), "https://app.example/assets/manifests/x.png");
         assert_eq!(resolve(m, "https://cdn.example/x.png"), "https://cdn.example/x.png");
+    }
+
+    #[test]
+    fn kept_icons_are_checked_again() {
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
+        // A web app: its manifest, and an icon whose content and ETag change.
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let port = server.server_addr().to_ip().unwrap().port();
+        let icon = Arc::new(Mutex::new((b"\x89PNG first".to_vec(), "\"v1\"".to_string())));
+        let asked = Arc::new(Mutex::new(Vec::<String>::new()));
+        let (serving, log) = (icon.clone(), asked.clone());
+        std::thread::spawn(move || {
+            for request in server.incoming_requests() {
+                let (bytes, etag) = serving.lock().unwrap().clone();
+                let conditional = request.headers().iter().find(|h| h.field.equiv("If-None-Match")).map(|h| h.value.to_string());
+                log.lock().unwrap().push(format!("{} {}", request.url(), conditional.clone().unwrap_or_default()));
+                let manifest = request.url().ends_with(".webmanifest");
+                let response = if manifest {
+                    tiny_http::Response::from_data(br#"{"icons":[{"src":"/icon.png","sizes":"512x512","type":"image/png"}]}"#.to_vec())
+                } else if conditional.as_deref() == Some(etag.as_str()) {
+                    tiny_http::Response::from_data(Vec::new()).with_status_code(304)
+                } else {
+                    tiny_http::Response::from_data(bytes).with_header(tiny_http::Header::from_bytes("ETag", etag.as_bytes()).unwrap())
+                };
+                let _ = request.respond(response);
+            }
+        });
+        let manifest = format!("http://127.0.0.1:{port}/manifest.webmanifest");
+        let dir = std::env::temp_dir().join(format!("kynoko-icons-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("App.png");
+        let hour = Duration::from_secs(3600);
+
+        assert_eq!(kept_icon(&manifest, &path, hour).unwrap(), b"\x89PNG first");
+        let requests = asked.lock().unwrap().len();
+        // Checked less than an hour ago: nothing asked.
+        assert_eq!(kept_icon(&manifest, &path, hour).unwrap(), b"\x89PNG first");
+        assert_eq!(asked.lock().unwrap().len(), requests);
+        // Due: asked with its ETag, unchanged (304), kept.
+        assert_eq!(kept_icon(&manifest, &path, Duration::ZERO).unwrap(), b"\x89PNG first");
+        assert_eq!(asked.lock().unwrap().last().unwrap(), "/icon.png \"v1\"");
+        // The app changed its icon: the new one replaces it.
+        *icon.lock().unwrap() = (b"\x89PNG second".to_vec(), "\"v2\"".to_string());
+        assert_eq!(kept_icon(&manifest, &path, Duration::ZERO).unwrap(), b"\x89PNG second");
+        assert_eq!(std::fs::read(&path).unwrap(), b"\x89PNG second");
+        // Something else than a PNG (a web app's fallback page): kept.
+        *icon.lock().unwrap() = (b"<!doctype html>".to_vec(), "\"v3\"".to_string());
+        assert_eq!(kept_icon(&manifest, &path, Duration::ZERO).unwrap(), b"\x89PNG second");
+        // Offline: kept.
+        assert_eq!(kept_icon("http://127.0.0.1:9/manifest.webmanifest", &path, Duration::ZERO).unwrap(), b"\x89PNG second");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
