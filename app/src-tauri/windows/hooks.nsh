@@ -15,10 +15,16 @@
 ; copies it to a temporary folder and runs it from there; called by an
 ; installer, it runs in place, from the install directory. (StrCmp, under
 ; ${If}, ignores case.)
+;
+; The apps' own programs for "Open with" (open-with\, beside the launcher)
+; go with the cleanup; their folder is removed after it all the same, so
+; that nothing of the launcher's stays in the install directory.
 !macro NSIS_HOOK_PREUNINSTALL
   ${If} $DeleteAppDataCheckboxState = 1
     ExecWait '"$INSTDIR\kynoko-launcher.exe" cleanup'
+    RMDir /r "$INSTDIR\open-with"
   ${ElseIf} $EXEDIR != $INSTDIR
     ExecWait '"$INSTDIR\kynoko-launcher.exe" cleanup --keep-preferences'
+    RMDir /r "$INSTDIR\open-with"
   ${EndIf}
 !macroend
