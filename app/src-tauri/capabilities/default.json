@@ -20,6 +20,7 @@
     "allow-check-catalogue",
     "allow-launch",
     "allow-remove-everything",
-    "allow-open-default-apps"
+    "allow-open-default-apps",
+    "allow-open-download"
   ]
 }

@@ -675,23 +675,86 @@ fn set_shortcuts(shared: tauri::State<'_, Shared>, code: String, on: bool, lang:
 }
 
 /// "Check now": at most once a minute, whatever the button is clicked.
-#[tauri::command]
-fn check_catalogue(app: AppHandle, shared: tauri::State<'_, Shared>) -> Result<(), String> {
-    {
-        let mut last = shared.last_manual_check.lock().expect("lock");
-        if last.map(|t| t.elapsed() < Duration::from_secs(60)).unwrap_or(false) {
-            return Ok(());
-        }
-        *last = Some(Instant::now());
-    }
-    check_online(&app);
-    Ok(())
+/// What "Check now" found: the catalogue, and the launcher's own version.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CheckReport {
+    /// "updated", "unchanged", "failed" or "recent" (checked less than a
+    /// minute ago: not asked again).
+    catalogue: String,
+    catalogue_error: Option<String>,
+    /// This launcher's version, and the latest published one (None when
+    /// GitHub could not be asked).
+    current: String,
+    latest: Option<String>,
+    newer: bool,
 }
 
-/// One conditional request for the online catalogue; a changed catalogue is
-/// applied to what the user set up (see reconcile) before it replaces the
-/// one in use.
-fn check_online(app: &AppHandle) {
+/// Where the launcher's releases are published (its public repository).
+const RELEASES_API: &str = "https://api.github.com/repos/kynoko/kynoko-launcher/releases/latest";
+pub(crate) const RELEASES_PAGE: &str = "https://github.com/kynoko/kynoko-launcher/releases/latest";
+
+/// The latest published version ("0.2.11"), from GitHub's public API.
+fn latest_release() -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(10)).build();
+    let release: serde_json::Value = agent
+        .get(RELEASES_API)
+        .set("User-Agent", "kynoko-launcher")
+        .set("Accept", "application/vnd.github+json")
+        .call()
+        .map_err(|e| e.to_string())?
+        .into_json()
+        .map_err(|e| e.to_string())?;
+    release["tag_name"].as_str().map(|t| t.trim_start_matches('v').to_string()).ok_or_else(|| "no tag".to_string())
+}
+
+/// Whether `latest` is a newer version than `current` ("0.2.11" > "0.2.9").
+fn is_newer(latest: &str, current: &str) -> bool {
+    let parse = |v: &str| v.split('.').map(|n| n.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
+    parse(latest) > parse(current)
+}
+
+/// "Check now": the catalogue (at most once a minute) and the launcher's
+/// version, both answered, off the window's thread.
+#[tauri::command]
+async fn check_catalogue(app: AppHandle) -> Result<CheckReport, String> {
+    let current = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        let recent = {
+            let shared = app.state::<Shared>();
+            let mut last = shared.last_manual_check.lock().expect("lock");
+            let recent = last.is_some_and(|t| t.elapsed() < Duration::from_secs(60));
+            if !recent {
+                *last = Some(Instant::now());
+            }
+            recent
+        };
+        let (catalogue, catalogue_error) = if recent {
+            ("recent".to_string(), None)
+        } else {
+            match check_online(&app) {
+                Ok(true) => ("updated".to_string(), None),
+                Ok(false) => ("unchanged".to_string(), None),
+                Err(e) => ("failed".to_string(), Some(e)),
+            }
+        };
+        let latest = latest_release().ok();
+        let newer = latest.as_deref().is_some_and(|l| is_newer(l, &current));
+        CheckReport { catalogue, catalogue_error, current, latest, newer }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Opens the page of the latest release in the system's browser.
+#[tauri::command]
+fn open_download() -> Result<(), String> {
+    launch::open(RELEASES_PAGE, None, None).map_err(|e| e.to_string())
+}
+
+/// One check of the online catalogue: Ok(true) when it changed (and was
+/// applied), Ok(false) when it did not.
+fn check_online(app: &AppHandle) -> Result<bool, String> {
     let shared = app.state::<Shared>();
     let settings = Settings::load();
     let url = settings.catalogue_url.clone().unwrap_or_else(|| catalogue::DEFAULT_URL.to_string());
@@ -702,10 +765,14 @@ fn check_online(app: &AppHandle) {
             reconcile(&old, &fresh);
             *shared.catalogue.write().expect("catalogue lock") = fresh;
             let _ = app.emit("catalogue-updated", ());
+            Ok(true)
         }
-        Refresh::Unchanged => {}
+        Refresh::Unchanged => Ok(false),
         // Kept in the cache and shown quietly in the window; never a notification.
-        Refresh::Failed(e) => eprintln!("kynoko-launcher: catalogue not refreshed: {e}"),
+        Refresh::Failed(e) => {
+            eprintln!("kynoko-launcher: catalogue not refreshed: {e}");
+            Err(e.to_string())
+        }
     }
 }
 
@@ -792,7 +859,7 @@ fn watch_catalogue(app: AppHandle) {
         thread::sleep(Duration::from_secs(first_delay));
         loop {
             if catalogue::now() >= Cache::load().due_at() {
-                check_online(&app);
+                let _ = check_online(&app);
             }
             thread::sleep(Duration::from_secs(600));
         }
@@ -935,7 +1002,8 @@ pub fn run() {
             check_catalogue,
             launch,
             remove_everything,
-            open_default_apps
+            open_default_apps,
+            open_download
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -1023,6 +1091,14 @@ mod tests {
         assert_eq!(base64(b"foo"), "Zm9v");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
         assert_eq!(base64(&[0xff, 0xfe]), "//4=");
+    }
+
+    #[test]
+    fn versions() {
+        assert!(is_newer("0.2.11", "0.2.9"));
+        assert!(is_newer("0.3.0", "0.2.11"));
+        assert!(!is_newer("0.2.11", "0.2.11"));
+        assert!(!is_newer("0.2.9", "0.2.11"));
     }
 
     #[test]

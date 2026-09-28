@@ -205,6 +205,10 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
 .field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
 .error { color: var(--kynoko-danger); margin: 10px 0 0; }
+/* What "Check now" found. */
+.check-report { margin-block-start: 10px; font-size: 0.86rem; }
+.check-report p { margin: 2px 0; }
+.check-report .newer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 600; }
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-block-start: 26px; }
 /* The reset: apart from the rest, its effect written beside it. */
 .reset {

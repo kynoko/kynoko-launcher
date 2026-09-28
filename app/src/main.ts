@@ -188,6 +188,11 @@ function iconOf(code: string): HTMLElement {
   return img;
 }
 
+/** What "Check now" answers (see check_catalogue). */
+interface CheckReport { catalogue: string; catalogueError: string | null; current: string; latest: string | null; newer: boolean }
+let checking = false;
+let lastCheck: CheckReport | null = null;
+
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
     await action();
@@ -294,11 +299,35 @@ async function render(): Promise<void> {
     });
   });
   const date = new Date(state.catalogueDate);
-  const check = el('button', { type: 'button' }, t(lang, 'CHECK_NOW'));
-  check.addEventListener('click', () => void run(() => invoke('check_catalogue')));
+  const check = el('button', { type: 'button', disabled: checking }, t(lang, checking ? 'CHECKING' : 'CHECK_NOW'));
+  check.addEventListener('click', () => {
+    checking = true;
+    lastCheck = null;
+    void render();
+    void invoke<CheckReport>('check_catalogue')
+      .then((r) => { lastCheck = r; }, (e) => { lastCheck = { catalogue: 'failed', catalogueError: String(e), current: state.version, latest: null, newer: false }; })
+      .finally(() => { checking = false; void render(); });
+  });
   const status = el('span', { class: 'note' }, `Kynoko Launcher ${state.version} · ${t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) })}`);
   const foot = el('div', { class: 'foot' }, el('span', { class: 'field' }, status, check));
   root.append(foot);
+  // What "Check now" found, said where it was asked.
+  if (lastCheck) {
+    const c = lastCheck;
+    const catalogueLine = c.catalogue === 'updated' ? t(lang, 'CAT_UPDATED')
+      : c.catalogue === 'unchanged' ? t(lang, 'CAT_UNCHANGED')
+      : c.catalogue === 'recent' ? t(lang, 'CAT_RECENT')
+      : t(lang, 'CAT_FAILED', { error: c.catalogueError ?? '' });
+    const report = el('div', { class: 'check-report', role: 'status' }, el('p', {}, catalogueLine));
+    if (c.newer && c.latest) {
+      const download = el('button', { type: 'button', class: 'primary' }, t(lang, 'DOWNLOAD_NEW'));
+      download.addEventListener('click', () => void invoke('open_download'));
+      report.append(el('p', { class: 'newer' }, el('span', {}, t(lang, 'APP_NEWER', { version: c.latest })), download));
+    } else {
+      report.append(el('p', {}, c.latest ? t(lang, 'APP_UPTODATE', { version: c.current }) : t(lang, 'APP_UNKNOWN')));
+    }
+    root.append(report);
+  }
   // The reset, set apart and said in full: the launcher stays, everything it
   // did to the system goes, and its settings with it.
   root.append(el('div', { class: 'reset' }, remove, el('p', { class: 'note' }, t(lang, 'REMOVE_NOTE'))));

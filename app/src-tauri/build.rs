@@ -18,6 +18,7 @@ fn main() {
         "launch",
         "remove_everything",
         "open_default_apps",
+        "open_download",
         "own_window_drag",
         "own_window_minimize",
         "own_window_toggle_maximize",
