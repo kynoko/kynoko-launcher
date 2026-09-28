@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "kynoko-window",
+  "description": "Kynoko windows (app pages, remote): the app's bar is the window's title bar, so the page may move, minimize, maximize and close the window it is in. Only through the launcher's own_window_* commands, which act on the CALLING window and take no other: Tauri's generic window commands would let a page name another window. Nothing else: no launcher command, no file, no setting.",
+  "windows": ["app-*"],
+  "remote": {
+    "urls": ["https://kynoko.com/*", "https://*.kynoko.com/*", "https://*.kynoko.com:*/*"]
+  },
+  "permissions": [
+    "allow-own-window-drag",
+    "allow-own-window-minimize",
+    "allow-own-window-toggle-maximize",
+    "allow-own-window-is-maximized",
+    "allow-own-window-close"
+  ]
+}

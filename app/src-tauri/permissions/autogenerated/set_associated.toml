@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-associated"
+description = "Enables the set_associated command without any pre-configured scope."
+commands.allow = ["set_associated"]
+
+[[permission]]
+identifier = "deny-set-associated"
+description = "Denies the set_associated command without any pre-configured scope."
+commands.deny = ["set_associated"]

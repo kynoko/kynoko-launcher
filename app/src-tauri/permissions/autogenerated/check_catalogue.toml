@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-check-catalogue"
+description = "Enables the check_catalogue command without any pre-configured scope."
+commands.allow = ["check_catalogue"]
+
+[[permission]]
+identifier = "deny-check-catalogue"
+description = "Denies the check_catalogue command without any pre-configured scope."
+commands.deny = ["check_catalogue"]

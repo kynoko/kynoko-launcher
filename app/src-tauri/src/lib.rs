@@ -274,6 +274,39 @@ fn cleanup(keep_preferences: bool) -> Result<(), String> {
     Ok(())
 }
 
+/* Kynoko windows' own title bar (the skeleton's KynokoNativeWindowService).
+   Each command acts on the window the calling page is in, and can reach no
+   other: the page names nothing. Only Kynoko windows are granted them. */
+
+#[tauri::command]
+fn own_window_drag(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.start_dragging().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn own_window_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn own_window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.is_maximized().map_err(|e| e.to_string())? {
+        window.unmaximize().map_err(|e| e.to_string())
+    } else {
+        window.maximize().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn own_window_is_maximized(window: tauri::WebviewWindow) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn own_window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
 /// An app page in the launcher's own window: an app window on every system
 /// (the system's web engine: WebView2, WKWebView, WebKitGTK), whatever
 /// browser is installed. The page is a remote site: these windows are given
@@ -290,13 +323,28 @@ fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
     // pages, whose return must land in this same session): any other
     // address goes to the system's browser.
     thread::spawn(move || {
-        let built = tauri::WebviewWindowBuilder::new(&handle, &label, tauri::WebviewUrl::External(target))
+        let builder = tauri::WebviewWindowBuilder::new(&handle, &label, tauri::WebviewUrl::External(target));
+        #[cfg(target_os = "macos")]
+        let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+        let built = builder
             .title("Kynoko")
             .inner_size(1280.0, 840.0)
+            // No system title bar: the app's own bar is the title bar (the
+            // skeleton's KynokoNativeWindowService, allowed by the capability
+            // "kynoko-window"). macOS keeps its window buttons, drawn over
+            // the start of the app's bar.
+            .decorations(cfg!(target_os = "macos"))
             // Files dropped from the system go to the PAGE (the apps take them
             // with the web's drag and drop), not to a launcher handler that
             // would swallow them before the page sees anything.
             .disable_drag_drop_handler()
+            // The window is named after its page ("Comptes | Kynoko Office"):
+            // that is what the taskbar and Alt+Tab show.
+            .on_document_title_changed(|window, title| {
+                if !title.trim().is_empty() {
+                    let _ = window.set_title(&title);
+                }
+            })
             .on_navigation(|u| {
                 let within = |d: &str, h: &str| h == d || h.ends_with(&format!(".{d}"));
                 let kynoko = u.scheme() == "https"
@@ -847,10 +895,16 @@ pub fn run() {
     let show_window = matches!(first, Command::Window(_));
     let cleaning = matches!(first, Command::Cleanup { .. });
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+    let mut builder = tauri::Builder::default();
+    // One launcher at a time: a second start hands its arguments over. An
+    // ISOLATED run (end-to-end tests) stays out of it, so that a test never
+    // lands in the installed launcher of the machine it runs on.
+    if !settings::isolated() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             dispatch(app, parse(&argv[1..]));
-        }))
+        }));
+    }
+    builder
         .manage(Shared {
             catalogue: RwLock::new(Cache::load().catalogue()),
             last_manual_check: Mutex::new(None),
@@ -871,6 +925,11 @@ pub fn run() {
             set_associated,
             set_extension,
             set_shortcut_item,
+            own_window_drag,
+            own_window_minimize,
+            own_window_toggle_maximize,
+            own_window_is_maximized,
+            own_window_close,
             app_icon,
             set_shortcuts,
             check_catalogue,
