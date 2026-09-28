@@ -293,6 +293,10 @@ fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
         let built = tauri::WebviewWindowBuilder::new(&handle, &label, tauri::WebviewUrl::External(target))
             .title("Kynoko")
             .inner_size(1280.0, 840.0)
+            // Files dropped from the system go to the PAGE (the apps take them
+            // with the web's drag and drop), not to a launcher handler that
+            // would swallow them before the page sees anything.
+            .disable_drag_drop_handler()
             .on_navigation(|u| {
                 let within = |d: &str, h: &str| h == d || h.ends_with(&format!(".{d}"));
                 let kynoko = u.scheme() == "https"
