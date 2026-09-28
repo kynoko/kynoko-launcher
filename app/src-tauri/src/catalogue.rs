@@ -259,6 +259,18 @@ impl App {
             .cloned()
             .unwrap_or_else(|| self.code.clone())
     }
+
+    /// The app's name where the system lists it among other programs ("Open
+    /// with"): with the brand, once. "Media Studio" is "Kynoko Media
+    /// Studio"; "Kynoko Office" stays as it is.
+    pub fn display_name(&self, lang: &str) -> String {
+        let name = self.name(lang);
+        if name.to_lowercase().contains("kynoko") {
+            name
+        } else {
+            format!("Kynoko {name}")
+        }
+    }
 }
 
 #[cfg(test)]
@@ -275,6 +287,21 @@ mod tests {
         assert_eq!(c.apps[0].name("fr"), "Office");
         assert!(!c.apps[0].facades[0].listed);
         assert_eq!(c.apps[0].extensions(), ["docx"]);
+    }
+
+    #[test]
+    fn the_brand_once() {
+        let app = |en: &str, fr: &str| App {
+            code: "X".into(),
+            url: String::new(),
+            names: [("en".to_string(), en.to_string()), ("fr".to_string(), fr.to_string())].into(),
+            status: "live".into(),
+            facades: vec![],
+        };
+        assert_eq!(app("Media Studio", "Media Studio").display_name("en"), "Kynoko Media Studio");
+        assert_eq!(app("Kynoko Office", "Kynoko Office").display_name("fr"), "Kynoko Office");
+        assert_eq!(app("Game Kit", "La Panoplie").display_name("fr"), "Kynoko La Panoplie");
+        assert_eq!(app("KYNOKO Games", "KYNOKO Games").display_name("en"), "KYNOKO Games");
     }
 
     #[test]

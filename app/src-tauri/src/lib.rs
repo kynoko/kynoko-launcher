@@ -23,6 +23,8 @@ mod launch;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(windows)]
+mod programs;
 mod settings;
 mod shortcuts;
 mod xdg;
@@ -675,8 +677,7 @@ fn set_extension(shared: tauri::State<'_, Shared>, code: String, ext: Option<Str
     settings.save().map_err(|e| e.to_string())?;
     if settings.associated_apps.contains(&code) {
         let mut inventory = Inventory::load();
-        assoc::unregister(app, &mut inventory).map_err(|e| e.to_string())?;
-        assoc::register(&settings.chosen(app), &settings, &mut inventory).map_err(|e| e.to_string())?;
+        assoc::register_again(app, &settings.chosen(app), &settings, &mut inventory).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -854,12 +855,14 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
         if after.map(|a| settings.chosen(a)) == Some(settings.chosen(before)) {
             continue;
         }
-        let _ = assoc::unregister(before, &mut inventory);
         match after {
             Some(a) => {
-                let _ = assoc::register(&settings.chosen(a), &settings, &mut inventory);
+                let _ = assoc::register_again(before, &settings.chosen(a), &settings, &mut inventory);
             }
-            None => settings.associated_apps.retain(|c| c != &code),
+            None => {
+                let _ = assoc::unregister(before, &mut inventory);
+                settings.associated_apps.retain(|c| c != &code);
+            }
         }
     }
     for code in settings.shortcut_apps.clone() {
@@ -896,8 +899,7 @@ fn refresh_registrations(app: &AppHandle) {
         let mut inventory = Inventory::load();
         for code in settings.associated_apps.clone() {
             if let Some(app) = catalogue.app(&code) {
-                let _ = assoc::unregister(app, &mut inventory);
-                let _ = assoc::register(&settings.chosen(app), &settings, &mut inventory);
+                let _ = assoc::register_again(app, &settings.chosen(app), &settings, &mut inventory);
             }
         }
         let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
@@ -1021,11 +1023,6 @@ fn opened(app: &AppHandle, urls: &[tauri::Url]) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let first = parse(&args);
-    let show_window = matches!(first, Command::Window(_));
-    let cleaning = matches!(first, Command::Cleanup { .. });
-
     // Windows only lets the program the user just started bring a window to
     // the front. A double-clicked file starts THIS instance, which hands the
     // file to the launcher already running: lend it that right first, or the
@@ -1037,6 +1034,17 @@ pub fn run() {
             windows_sys::Win32::UI::WindowsAndMessaging::ASFW_ANY,
         );
     }
+    // Started as an app's own program ("Open with"): the launcher takes over.
+    #[cfg(windows)]
+    if programs::hand_over() {
+        return;
+    }
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let first = parse(&args);
+    let show_window = matches!(first, Command::Window(_));
+    let cleaning = matches!(first, Command::Cleanup { .. });
+
     let mut builder = tauri::Builder::default();
     // One launcher at a time: a second start hands its arguments over. An
     // ISOLATED run (end-to-end tests) stays out of it, so that a test never

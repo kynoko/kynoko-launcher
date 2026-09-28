@@ -133,8 +133,8 @@ fn profiles(engine: &Engine, program: &str, flatpak_id: Option<&str>) -> Vec<Pro
 
 /// The prefix of `app`'s open entries: one per facade its types open in
 /// (`kynoko-launcher-open-<app>-<facade>.desktop`), so "Open with" shows the
-/// facade's name and icon. Launcher 0.1 wrote a single `...-<app>.desktop`,
-/// still recognised on removal.
+/// app's name ("Kynoko Office") with the facade's icon. Launcher 0.1 wrote a
+/// single `...-<app>.desktop`, still recognised on removal.
 fn open_prefix(app: &App) -> String {
     format!("kynoko-launcher-open-{}-", app.code)
 }
@@ -192,7 +192,8 @@ pub fn register(app: &App, settings: &Settings, inventory: &mut Inventory) -> st
         let entry = format!("{}{}.desktop", open_prefix(app), facade.slug());
         let mut fields = vec![
             ("Type", "Application".to_string()),
-            ("Name", format!("{} - {}", app.name(lang), facade.name(lang))),
+            ("Name", app.display_name(lang)),
+            ("Comment", facade.name(lang)),
             ("Exec", format!("{} open --app {} %F", xdg::exec_quote(&exe()), app.code)),
             ("MimeType", format!("{};", mimes.join(";"))),
             ("NoDisplay", "true".into()),

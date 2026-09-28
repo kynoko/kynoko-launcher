@@ -26,15 +26,16 @@ fn prog_id(app: &App, ext: &str) -> String {
 
 /// Registers the launcher for every file type `app` opens (the caller passes
 /// the app as the user trimmed it, see Settings::chosen). Each type wears the
-/// name and the icon of the facade it opens in, and its command names the
-/// app: with two apps listed for the same type under "Open with", each entry
-/// opens its own.
+/// name and the icon of the facade it opens in. Under "Open with", it is the
+/// app's entry ("Kynoko Office", the facade's icon), on the app's own program
+/// (programs.rs): Windows merges the entries of the apps sharing a program.
 #[cfg(windows)]
 pub fn register(app: &App, settings: &crate::settings::Settings, inventory: &mut Inventory) -> std::io::Result<()> {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
 
-    let exe = std::env::current_exe()?.to_string_lossy().into_owned();
+    let launcher = std::env::current_exe()?;
+    let exe = launcher.to_string_lossy().into_owned();
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
     // The launcher as an application Windows can list under Default apps.
@@ -47,15 +48,25 @@ pub fn register(app: &App, settings: &crate::settings::Settings, inventory: &mut
     registered.set_value(APPLICATION_NAME, &CAPABILITIES)?;
     let (file_assoc, _) = hkcu.create_subkey(format!(r"{CAPABILITIES}\FileAssociations"))?;
 
+    let exts = app.extensions();
+    // The launcher stands in when the app's program cannot be had.
+    let program = if exts.is_empty() {
+        crate::programs::remove(&app.code, inventory)?;
+        exe.clone()
+    } else {
+        crate::programs::ensure(&launcher, &app.code, inventory).map_or_else(|| exe.clone(), |p| p.to_string_lossy().into_owned())
+    };
+
     let lang = settings.ui_lang.as_deref().unwrap_or("en");
+    let name = app.display_name(lang);
     let mut icons: std::collections::HashMap<String, Option<std::path::PathBuf>> = std::collections::HashMap::new();
-    for ext in app.extensions() {
+    for ext in exts {
         let id = prog_id(app, &ext);
         let class = format!(r"{CLASSES}\{id}");
         let facade = app.facade_for(&ext);
         let label = match facade {
-            Some(f) => format!("{} - {}", app.name(lang), f.name(lang)),
-            None => app.name(lang),
+            Some(f) => format!("{name} - {}", f.name(lang)),
+            None => name.clone(),
         };
         let icon_file = facade.and_then(|f| {
             icons
@@ -66,13 +77,19 @@ pub fn register(app: &App, settings: &crate::settings::Settings, inventory: &mut
         inventory.record(Artefact::RegistryKey { path: class.clone() })?;
         let (key, _) = hkcu.create_subkey(&class)?;
         key.set_value("", &format!("{label} ({})", ext.to_uppercase()))?;
+        let icon_ref = match icon_file {
+            Some(path) => format!("\"{}\",0", path.to_string_lossy()),
+            None => format!("\"{exe}\",0"),
+        };
         let (icon, _) = key.create_subkey("DefaultIcon")?;
-        match icon_file {
-            Some(path) => icon.set_value("", &format!("\"{}\",0", path.to_string_lossy()))?,
-            None => icon.set_value("", &format!("\"{exe}\",0"))?,
-        }
+        icon.set_value("", &icon_ref)?;
+        // Its entry under "Open with": named after the app, with the facade's
+        // icon (Windows would show the program's name and icon).
+        let (application, _) = key.create_subkey("Application")?;
+        application.set_value("ApplicationName", &name)?;
+        application.set_value("ApplicationIcon", &icon_ref)?;
         let (command, _) = key.create_subkey(r"shell\open\command")?;
-        command.set_value("", &format!("\"{exe}\" open --app {} \"%1\"", app.code))?;
+        command.set_value("", &format!("\"{program}\" open --app {} \"%1\"", app.code))?;
 
         // In the extension's "Open with" list: a value in a key that is not ours.
         let with = format!(r"{CLASSES}\.{ext}\OpenWithProgids");
@@ -89,6 +106,31 @@ pub fn register(app: &App, settings: &crate::settings::Settings, inventory: &mut
 /// Removes what `register` wrote for `app` (other apps keep theirs).
 #[cfg(windows)]
 pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
+    unregister_types(app, inventory)?;
+    crate::programs::remove(&app.code, inventory)
+}
+
+/// Registers `app` again as `after` now is (types chosen anew, a new
+/// definition from the catalogue): `unregister` then `register`, but the
+/// app's program kept in between rather than made again.
+pub fn register_again(
+    before: &App,
+    after: &App,
+    settings: &crate::settings::Settings,
+    inventory: &mut Inventory,
+) -> std::io::Result<()> {
+    unregister_types(before, inventory)?;
+    register(after, settings, inventory)
+}
+
+#[cfg(not(windows))]
+fn unregister_types(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
+    unregister(app, inventory)
+}
+
+/// What `unregister` removes, but the app's program.
+#[cfg(windows)]
+fn unregister_types(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);

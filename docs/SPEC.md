@@ -278,12 +278,23 @@ marked `primary` is proposed and the user can pick another.
 
 | OS | Mechanism | Default handler |
 |---|---|---|
-| Windows | `HKCU\Software\Classes`: a ProgID `Kynoko.<App>.<ext>` (icon, verb `open` -> `kynoko-launcher open "%1"`), `.<ext>\OpenWithProgids`, plus `Capabilities` + `RegisteredApplications` so that Kynoko Launcher appears in Settings > Default apps | **Cannot be set programmatically** (hashed `UserChoice`). Kynoko Launcher opens the Default apps page on its own entry and explains. |
+| Windows | `HKCU\Software\Classes`: a ProgID `Kynoko.<App>.<ext>` (the facade's icon, verb `open` -> the app's own program `open-with\kynoko-<app>.exe open --app <App> "%1"`, `Application\ApplicationName` + `ApplicationIcon` for its "Open with" entry), `.<ext>\OpenWithProgids`, plus `Capabilities` + `RegisteredApplications` so that Kynoko Launcher appears in Settings > Default apps | **Cannot be set programmatically** (hashed `UserChoice`). Kynoko Launcher opens the Default apps page on its own entry and explains. |
 | macOS | Document types are **static**: the `Info.plist` of Kynoko Launcher declares every Kynoko type with `LSHandlerRank = Alternate`. Enabling an extension = making it the default | `NSWorkspace.setDefaultApplication(at:toOpenContentType:)` (may show a system confirmation) |
-| Linux | `MimeType=` of a `kynoko-launcher-open.desktop`, a shared-mime-info XML for types the system lacks, `update-desktop-database` | `xdg-mime default` / `~/.config/mimeapps.list` |
+| Linux | `MimeType=` of one desktop entry per facade (`kynoko-launcher-open-<App>-<facade>.desktop`, named after the app, the facade's icon), a shared-mime-info XML for types the system lacks, `update-desktop-database` | `xdg-mime default` / `~/.config/mimeapps.list` |
 
 On macOS, files arrive through Apple Events, not `argv` (Tauri:
 `RunEvent::Opened`).
+
+"Open with" names the app, with the brand once: "Kynoko Office", "Kynoko
+Media Studio". Windows lists the entries of a type by program, merging the
+types of the apps that share one, and names an entry after its program
+unless the ProgID's `Application` key names it: each associated app gets
+its own program, `open-with\kynoko-<app>.exe` next to the launcher (one
+copy of the launcher's binary, the other apps' programs hard links to it,
+as Chrome does for the web apps it installs). Started, it hands its
+arguments to the launcher and quits at once, so it never holds a file an
+update replaces; a new version refreshes it on its first start. macOS lists
+Kynoko Launcher itself, its one bundle declaring every type.
 
 Consequence of the macOS static declaration: while Kynoko Launcher is
 installed, it is listed in "Open With" for every Kynoko type, even the ones
@@ -588,4 +599,5 @@ catalogue in the system's language, falling back to English.
 | 2026-09-28 | The window, redesigned with the design system's look (vendored tokens, faceted corners mirrored in right-to-left): the default browser on one line; each app a closed accordion whose line holds the app (click opens it), its browser (aligned across apps) and a stacked summary of its file types and shortcuts; inside, a switch "Associate the file types" with the types shown only while it is on, and the shortcuts as an accordion, one line each. No separate shortcuts switch: an app has shortcuts while one is ticked. |
 | 2026-09-28 | Kynoko windows have no system title bar: the app's bar is the title bar (skeleton 0.91, KynokoNativeWindowService: its empty parts move the window, a double press maximizes it, window buttons at its end; macOS keeps its own over the bar's start). The page may only act on ITS OWN window, through own_window_* commands that take no target: Tauri's generic window commands would let it name another window (verified: they are refused, as are the launcher's commands). Every command is now listed in the app manifest, the settings window granted them explicitly. The window takes the page's title (taskbar, Alt+Tab). Files dropped on it reach the page. An isolated run skips the single-instance lock. |
 | 2026-09-28 | A Kynoko window never depends on its page to be movable and closable: a page that has not taken the title bar over (own_window_* call) 2.5 s after loading gets the system's title bar back (an older app version served by its service worker, the sign-in page, a payment page, an error page), and a page that takes it removes it again. The window opened for a file comes to the front with the focus: the instance a double-click starts lends the running launcher the right to bring windows forward (AllowSetForegroundWindow) before handing the file over. |
+| 2026-09-28 | "Open with" entries named after the app, the brand once ("Kynoko Office", "Kynoko Media Studio"), with the facade's icon. Windows: each associated app has its own program (`open-with\kynoko-<app>.exe`, a copy of the launcher's binary or a hard link to one) that hands over to the launcher at once, since Windows merges the entries sharing a program and names them after it; the ProgID's `Application\ApplicationName` / `ApplicationIcon` give the name and the icon (checked with SHAssocEnumHandlers, the list the "Open with" menu shows). A re-registration keeps the program instead of copying it again. Linux: the open entries named the same, the facade in their comment. macOS unchanged: one bundle, "Kynoko Launcher". |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
