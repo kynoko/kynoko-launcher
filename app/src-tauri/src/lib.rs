@@ -43,6 +43,10 @@ use settings::{Inventory, Settings};
 /// How long a freshly opened session waits for its page before the agent
 /// may quit (the browser can take a while to start).
 const FIRST_CONTACT: Duration = Duration::from_secs(120);
+/// After the last Kynoko window closes, the launcher stays this long: the web
+/// engine writes cookies and storage to disk with a delay (about 30 s for
+/// cookies), and quitting sooner loses a sign-in made just before.
+const FLUSH_GRACE: Duration = Duration::from_secs(40);
 
 /// Added to every app address the launcher opens: the app then knows the
 /// launcher is installed for this browser, and its menu entry opens it
@@ -98,6 +102,8 @@ struct Shared {
     last_manual_check: Mutex<Option<Instant>>,
     bridge: Mutex<Option<Bridge>>,
     handoff: Mutex<Option<Handoff>>,
+    /// When a Kynoko window was last seen open or closed (see FLUSH_GRACE).
+    last_app_window: Mutex<Option<Instant>>,
     /// Set at start: what the launcher's own app windows are opened with.
     handle: std::sync::OnceLock<AppHandle>,
     last_open: Mutex<Option<Instant>>,
@@ -337,8 +343,14 @@ fn watch_idle(app: AppHandle) {
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
         let shared = app.state::<Shared>();
+        let app_windows = app.webview_windows().keys().any(|l| l.starts_with("app-"));
+        if app_windows {
+            *shared.last_app_window.lock().expect("lock") = Some(Instant::now());
+        }
+        let flushing = shared.last_app_window.lock().expect("lock").is_some_and(|t| t.elapsed() < FLUSH_GRACE);
         let window_shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false)
-            || app.webview_windows().keys().any(|l| l.starts_with("app-"));
+            || app_windows
+            || flushing;
         let live = shared.bridge.lock().expect("bridge lock").as_ref().map(|b| b.live()).unwrap_or(0);
         let waiting = shared.last_open.lock().expect("lock").map(|t| t.elapsed() < FIRST_CONTACT).unwrap_or(false);
         if !window_shown && live == 0 && !waiting {
@@ -840,6 +852,7 @@ pub fn run() {
             last_manual_check: Mutex::new(None),
             bridge: Mutex::new(None),
             handoff: Mutex::new(None),
+            last_app_window: Mutex::new(None),
             handle: std::sync::OnceLock::new(),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
@@ -895,11 +908,17 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Closing the window hides it: an open file may still need the
-            // bridge. The idle watch quits once nothing does.
+            // Closing the settings window hides it: an open file may still
+            // need the bridge. The idle watch quits once nothing does. A
+            // Kynoko window (an app page) really closes: hidden, it would
+            // keep the launcher and its page alive for nothing.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    *window.state::<Shared>().last_app_window.lock().expect("lock") = Some(Instant::now());
+                }
                 watch_idle(window.app_handle().clone());
             }
         })
