@@ -47,6 +47,13 @@ const FIRST_CONTACT: Duration = Duration::from_secs(120);
 /// engine writes cookies and storage to disk with a delay (about 30 s for
 /// cookies), and quitting sooner loses a sign-in made just before.
 const FLUSH_GRACE: Duration = Duration::from_secs(40);
+/// A Kynoko window starts without the system's title bar: its page's own bar
+/// takes its place (the skeleton asks own_window_is_maximized as it starts,
+/// which is how it says so). A page that has not done it this long after
+/// loading gets the system's title bar back: an older version of an app, the
+/// sign-in page, a payment page, an error page; a window must always be
+/// movable and closable.
+const TITLE_BAR_GRACE: Duration = Duration::from_millis(2500);
 
 /// Added to every app address the launcher opens: the app then knows the
 /// launcher is installed for this browser, and its menu entry opens it
@@ -104,6 +111,10 @@ struct Shared {
     handoff: Mutex<Option<Handoff>>,
     /// When a Kynoko window was last seen open or closed (see FLUSH_GRACE).
     last_app_window: Mutex<Option<Instant>>,
+    /// Per Kynoko window: when its page last started loading, and when a
+    /// page last took over the title bar (see TITLE_BAR_GRACE).
+    page_loads: Mutex<std::collections::HashMap<String, Instant>>,
+    title_bar_claims: Mutex<std::collections::HashMap<String, Instant>>,
     /// Set at start: what the launcher's own app windows are opened with.
     handle: std::sync::OnceLock<AppHandle>,
     last_open: Mutex<Option<Instant>>,
@@ -278,18 +289,36 @@ fn cleanup(keep_preferences: bool) -> Result<(), String> {
    Each command acts on the window the calling page is in, and can reach no
    other: the page names nothing. Only Kynoko windows are granted them. */
 
+/// The page holds the title bar: noted, and the system's taken away if it
+/// had been given back (see TITLE_BAR_GRACE).
+fn claim_title_bar(window: &tauri::WebviewWindow) {
+    window
+        .state::<Shared>()
+        .title_bar_claims
+        .lock()
+        .expect("lock")
+        .insert(window.label().to_string(), Instant::now());
+    #[cfg(not(target_os = "macos"))]
+    if window.is_decorated().unwrap_or(false) {
+        let _ = window.set_decorations(false);
+    }
+}
+
 #[tauri::command]
 fn own_window_drag(window: tauri::WebviewWindow) -> Result<(), String> {
+    claim_title_bar(&window);
     window.start_dragging().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn own_window_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
+    claim_title_bar(&window);
     window.minimize().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn own_window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String> {
+    claim_title_bar(&window);
     if window.is_maximized().map_err(|e| e.to_string())? {
         window.unmaximize().map_err(|e| e.to_string())
     } else {
@@ -299,12 +328,40 @@ fn own_window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String
 
 #[tauri::command]
 fn own_window_is_maximized(window: tauri::WebviewWindow) -> Result<bool, String> {
+    claim_title_bar(&window);
     window.is_maximized().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn own_window_close(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
+}
+
+/// Page loads of a Kynoko window: a page that has not taken the title bar
+/// TITLE_BAR_GRACE after loading gets the system's back.
+fn watch_title_bar(window: tauri::WebviewWindow, event: tauri::webview::PageLoadEvent) {
+    let label = window.label().to_string();
+    match event {
+        tauri::webview::PageLoadEvent::Started => {
+            window.state::<Shared>().page_loads.lock().expect("lock").insert(label, Instant::now());
+        }
+        tauri::webview::PageLoadEvent::Finished => {
+            thread::spawn(move || {
+                thread::sleep(TITLE_BAR_GRACE);
+                let shared = window.state::<Shared>();
+                let started = shared.page_loads.lock().expect("lock").get(&label).copied();
+                let claimed = shared.title_bar_claims.lock().expect("lock").get(&label).copied();
+                let held = match (started, claimed) {
+                    (Some(s), Some(c)) => c >= s,
+                    (None, Some(_)) => true,
+                    _ => false,
+                };
+                if !held {
+                    let _ = window.set_decorations(true);
+                }
+            });
+        }
+    }
 }
 
 /// An app page in the launcher's own window: an app window on every system
@@ -338,6 +395,8 @@ fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
             // with the web's drag and drop), not to a launcher handler that
             // would swallow them before the page sees anything.
             .disable_drag_drop_handler()
+            .on_page_load(|window, payload| watch_title_bar(window, payload.event()))
+            .focused(true)
             // The window is named after its page ("Comptes | Kynoko Office"):
             // that is what the taskbar and Alt+Tab show.
             .on_document_title_changed(|window, title| {
@@ -355,8 +414,13 @@ fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
                 kynoko || u.scheme() == "about"
             })
             .build();
-        if let Err(e) = built {
-            eprintln!("kynoko-launcher: cannot open an app window: {e}");
+        match built {
+            // In front, with the focus: it was opened for the user, now.
+            Ok(window) => {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            Err(e) => eprintln!("kynoko-launcher: cannot open an app window: {e}"),
         }
     });
     Ok(())
@@ -962,6 +1026,17 @@ pub fn run() {
     let show_window = matches!(first, Command::Window(_));
     let cleaning = matches!(first, Command::Cleanup { .. });
 
+    // Windows only lets the program the user just started bring a window to
+    // the front. A double-clicked file starts THIS instance, which hands the
+    // file to the launcher already running: lend it that right first, or the
+    // window opened for the file would stay behind the others.
+    #[cfg(windows)]
+    // SAFETY: plain Win32 call, no pointer involved.
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(
+            windows_sys::Win32::UI::WindowsAndMessaging::ASFW_ANY,
+        );
+    }
     let mut builder = tauri::Builder::default();
     // One launcher at a time: a second start hands its arguments over. An
     // ISOLATED run (end-to-end tests) stays out of it, so that a test never
@@ -978,6 +1053,8 @@ pub fn run() {
             bridge: Mutex::new(None),
             handoff: Mutex::new(None),
             last_app_window: Mutex::new(None),
+            page_loads: Mutex::new(std::collections::HashMap::new()),
+            title_bar_claims: Mutex::new(std::collections::HashMap::new()),
             handle: std::sync::OnceLock::new(),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
