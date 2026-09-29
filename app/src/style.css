@@ -213,9 +213,10 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
   background: rgba(245, 184, 61, 0.12); border: 1px solid rgba(245, 184, 61, 0.4);
 }
 .limits strong { font-weight: 700; }
+.limits .suggest-line { margin-block-start: 4px; padding-block-start: 5px; border-block-start: 1px dashed rgba(245, 184, 61, 0.5); }
 /* None of the browsers an app recommends is installed: some are named. */
 .suggest {
-  margin: 10px 0 0; padding: 8px 10px;
+  grid-column: 1 / -1; margin: 8px 0 0; padding: 8px 10px;
   font-size: 0.82rem; line-height: 1.4; color: var(--kynoko-text);
   border-radius: var(--kynoko-radius-sm);
   background: rgba(var(--kynoko-glow-rgb), 0.08); border: 1px solid rgba(var(--kynoko-glow-rgb), 0.28);

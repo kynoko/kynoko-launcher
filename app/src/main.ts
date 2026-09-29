@@ -267,20 +267,7 @@ async function render(): Promise<void> {
   if (state.defaultBrowser === EMBEDDED || state.apps.some((a) => a.browser === EMBEDDED)) {
     browserCard.append(el('p', { class: 'note' }, t(lang, 'EMBEDDED_HINT')));
   }
-  // Apps none of whose recommended browsers is installed: some are named,
-  // once for all the apps that would name the same ones.
-  const missing = new Map<string, string[]>();
-  for (const app of state.apps) {
-    if (!app.recommended.length || state.browsers.some((b) => app.recommended.includes(engineOf(b) ?? ''))) continue;
-    const names = app.recommended.flatMap((e) => suggestionsFor(e, state.os));
-    if (!names.length) continue;
-    const browsers = new Intl.ListFormat(lang, { type: 'disjunction' }).format(names);
-    missing.set(browsers, [...(missing.get(browsers) ?? []), app.name]);
-  }
-  for (const [browsers, apps] of missing) {
-    const app = new Intl.ListFormat(lang, { type: 'conjunction' }).format(apps);
-    browserCard.append(el('p', { class: 'suggest', role: 'note' }, t(lang, 'RECOMMEND_INSTALL', { app, browsers })));
-  }
+
   root.append(browserCard);
 
   root.append(el('h2', {}, t(lang, 'APPS_TITLE')));
@@ -327,11 +314,22 @@ async function render(): Promise<void> {
     // What the app says the user will miss in the browser it opens in.
     const browser = effectiveBrowser(state, app);
     const engine = engineOf(browser);
-    const limits = engine ? app.limitations.filter((l) => l.engines.includes(engine)) : [];
+    const limits = engine && !app.recommended.includes(engine) ? app.limitations.filter((l) => l.engines.includes(engine)) : [];
+    // None of the browsers the app recommends is installed: some are named,
+    // here, where the app's browser is chosen.
+    const names = app.recommended.length && !state.browsers.some((b) => app.recommended.includes(engineOf(b) ?? ''))
+      ? app.recommended.flatMap((e) => suggestionsFor(e, state.os))
+      : [];
+    const suggestion = names.length
+      ? t(lang, 'RECOMMEND_INSTALL', { browsers: new Intl.ListFormat(lang, { type: 'disjunction' }).format(names) })
+      : null;
     if (browser && limits.length) {
       card.append(el('div', { class: 'limits', role: 'note' },
         el('strong', {}, t(lang, 'LIMITS_WITH', { browser: labelOf(browser) })),
-        ...limits.map((l) => el('span', {}, l.text))));
+        ...limits.map((l) => el('span', {}, l.text)),
+        ...(suggestion ? [el('span', { class: 'suggest-line' }, suggestion)] : [])));
+    } else if (suggestion) {
+      card.append(el('p', { class: 'suggest', role: 'note' }, suggestion));
     }
     if (expanded) {
       card.append(el('div', { class: 'app-body', id: bodyId },
