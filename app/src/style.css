@@ -204,6 +204,8 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
 
 .field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
+/* A note on an app's own browser, under the app's line. */
+.app > .note { grid-column: 1 / -1; margin: 6px 0 0; }
 /* What an app says the user will miss in the browser it opens in. */
 .limits {
   grid-column: 1 / -1;
