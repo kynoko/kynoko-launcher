@@ -5,7 +5,7 @@
 export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
-  | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE'
+  | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE' | 'RECOMMENDED_GROUP' | 'OTHER_BROWSERS' | 'LIMITS_WITH'
   | 'APPS_TITLE' | 'ASSOCIATE' | 'SETTINGS_FOR' | 'SUMMARY_FILES' | 'SUMMARY_SHORTCUTS' | 'COUNT_OF' | 'NONE' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUT_ITEMS_WINDOWS' | 'SHORTCUT_ITEMS_MACOS' | 'SHORTCUT_ITEMS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_UPDATED' | 'CAT_UNCHANGED' | 'CAT_FAILED' | 'CAT_RECENT' | 'APP_UPTODATE' | 'APP_NEWER' | 'APP_UNKNOWN' | 'DOWNLOAD_NEW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
   string
@@ -21,6 +21,9 @@ const FR: Dict = {
   FOLLOW_DEFAULT: 'Navigateur par défaut',
   NO_BROWSERS: 'Aucun navigateur trouvé : celui du système sera utilisé.',
   EMBEDDED: "Fenêtre Kynoko (moteur web du système)",
+  RECOMMENDED_GROUP: 'Recommandés',
+  OTHER_BROWSERS: 'Autres navigateurs',
+  LIMITS_WITH: 'Avec {{browser}} :',
   EMBEDDED_HINT: "Fenêtre Kynoko : les apps et vos fichiers s'ouvrent en mode application sur tous les systèmes. Sa connexion à Kynoko est la sienne : connectez-vous-y une fois.",
   NO_APP_MODE: "{{browser}} n'a pas de mode application : les apps s'y ouvrent dans une fenêtre ordinaire. Pour le mode application, choisissez « Fenêtre Kynoko ».",
   APPS_TITLE: 'Applications',
@@ -71,6 +74,9 @@ const EN: Dict = {
   FOLLOW_DEFAULT: 'Default browser',
   NO_BROWSERS: "No browser found: the system's will be used.",
   EMBEDDED: "Kynoko window (system web engine)",
+  RECOMMENDED_GROUP: 'Recommended',
+  OTHER_BROWSERS: 'Other browsers',
+  LIMITS_WITH: 'With {{browser}}:',
   EMBEDDED_HINT: "Kynoko window: apps and your files open in app mode on every system. It has its own Kynoko sign-in: sign in there once.",
   NO_APP_MODE: "{{browser}} has no app mode: apps open in an ordinary window. For app mode, choose \"Kynoko window\".",
   APPS_TITLE: 'Apps',
@@ -121,6 +127,9 @@ const ES: Dict = {
   FOLLOW_DEFAULT: 'Navegador predeterminado',
   NO_BROWSERS: 'No se ha encontrado ningún navegador: se usará el del sistema.',
   EMBEDDED: "Ventana de Kynoko (motor web del sistema)",
+  RECOMMENDED_GROUP: 'Recomendados',
+  OTHER_BROWSERS: 'Otros navegadores',
+  LIMITS_WITH: 'Con {{browser}}:',
   EMBEDDED_HINT: "Ventana de Kynoko: las apps y sus archivos se abren en modo aplicación en todos los sistemas. Tiene su propia sesión de Kynoko: inicie sesión en ella una vez.",
   NO_APP_MODE: "{{browser}} no tiene modo aplicación: las apps se abren en una ventana normal. Para el modo aplicación, elija «Ventana de Kynoko».",
   APPS_TITLE: 'Aplicaciones',
@@ -171,6 +180,9 @@ const JA: Dict = {
   FOLLOW_DEFAULT: '既定のブラウザー',
   NO_BROWSERS: 'ブラウザーが見つかりません。システムの既定を使います。',
   EMBEDDED: "Kynoko のウィンドウ（システムの Web エンジン）",
+  RECOMMENDED_GROUP: 'おすすめ',
+  OTHER_BROWSERS: 'その他のブラウザー',
+  LIMITS_WITH: '{{browser}} の場合：',
   EMBEDDED_HINT: "Kynoko のウィンドウ：どのシステムでも、アプリとファイルがアプリモードで開きます。Kynoko へのログインはこのウィンドウ専用です。一度ログインしてください。",
   NO_APP_MODE: "{{browser}} にはアプリモードがないため、アプリは通常のウィンドウで開きます。アプリモードにするには「Kynoko のウィンドウ」を選んでください。",
   APPS_TITLE: 'アプリ',
@@ -221,6 +233,9 @@ const ZH_HANS: Dict = {
   FOLLOW_DEFAULT: '默认浏览器',
   NO_BROWSERS: '未找到浏览器：将使用系统默认浏览器。',
   EMBEDDED: "Kynoko 窗口（系统网页引擎）",
+  RECOMMENDED_GROUP: '推荐',
+  OTHER_BROWSERS: '其他浏览器',
+  LIMITS_WITH: '使用 {{browser}} 时：',
   EMBEDDED_HINT: "Kynoko 窗口：在所有系统上，应用和文件都以应用模式打开。它有自己的 Kynoko 登录状态：请在其中登录一次。",
   NO_APP_MODE: "{{browser}} 没有应用模式：应用会在普通窗口中打开。如需应用模式，请选择“Kynoko 窗口”。",
   APPS_TITLE: '应用',
@@ -271,6 +286,9 @@ const ZH_HANT: Dict = {
   FOLLOW_DEFAULT: '預設瀏覽器',
   NO_BROWSERS: '找不到瀏覽器：將使用系統預設瀏覽器。',
   EMBEDDED: "Kynoko 視窗（系統網頁引擎）",
+  RECOMMENDED_GROUP: '推薦',
+  OTHER_BROWSERS: '其他瀏覽器',
+  LIMITS_WITH: '使用 {{browser}} 時：',
   EMBEDDED_HINT: "Kynoko 視窗：在所有系統上，應用程式和檔案都以應用程式模式開啟。它有自己的 Kynoko 登入狀態：請在其中登入一次。",
   NO_APP_MODE: "{{browser}} 沒有應用程式模式：應用程式會在一般視窗中開啟。如需應用程式模式，請選擇「Kynoko 視窗」。",
   APPS_TITLE: '應用程式',
@@ -321,6 +339,9 @@ const AR: Dict = {
   FOLLOW_DEFAULT: 'المتصفح الافتراضي',
   NO_BROWSERS: 'لم يُعثر على أي متصفح: سيُستخدم متصفح النظام.',
   EMBEDDED: "نافذة Kynoko (محرك الويب في النظام)",
+  RECOMMENDED_GROUP: 'موصى بها',
+  OTHER_BROWSERS: 'متصفحات أخرى',
+  LIMITS_WITH: 'مع {{browser}}:',
   EMBEDDED_HINT: "نافذة Kynoko: تُفتح التطبيقات وملفاتك في وضع التطبيق على كل الأنظمة. لها تسجيل دخول خاص بها إلى Kynoko: سجّل الدخول فيها مرة واحدة.",
   NO_APP_MODE: "لا يوفّر {{browser}} وضع التطبيق: تُفتح التطبيقات في نافذة عادية. لوضع التطبيق، اختر «نافذة Kynoko».",
   APPS_TITLE: 'التطبيقات',

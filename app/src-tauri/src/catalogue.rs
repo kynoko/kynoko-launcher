@@ -25,6 +25,36 @@ pub struct App {
     pub status: String,
     #[serde(default)]
     pub facades: Vec<Facade>,
+    /// How the app fares per browser engine, as it declares it (its
+    /// manifest's `browsers`, relayed by the platform).
+    #[serde(default)]
+    pub browsers: Browsers,
+}
+
+/// An app's word on browsers: the engines it recommends, and what the user
+/// will miss in the others. Engines: `chromium` (Chrome, Edge, Brave, and the
+/// Kynoko window on Windows), `gecko` (Firefox), `webkit` (Safari, and the
+/// Kynoko window on macOS and Linux).
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+pub struct Browsers {
+    #[serde(default)]
+    pub recommended: Vec<String>,
+    #[serde(default)]
+    pub limitations: Vec<Limitation>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Limitation {
+    pub engines: Vec<String>,
+    /// One sentence, per language.
+    #[serde(default)]
+    pub texts: HashMap<String, String>,
+}
+
+impl Limitation {
+    pub fn text(&self, lang: &str) -> Option<String> {
+        self.texts.get(lang).or_else(|| self.texts.get("en")).or_else(|| self.texts.values().next()).cloned()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -260,6 +290,12 @@ impl App {
             .unwrap_or_else(|| self.code.clone())
     }
 
+    /// The app as the system sees it: its word on browsers is for the window
+    /// alone, a change of it rewrites no association and no shortcut.
+    pub fn for_system(&self) -> App {
+        App { browsers: Browsers::default(), ..self.clone() }
+    }
+
     /// The app's name where the system lists it among other programs ("Open
     /// with"): with the brand, once. "Media Studio" is "Kynoko Media
     /// Studio"; "Kynoko Office" stays as it is.
@@ -290,6 +326,21 @@ mod tests {
     }
 
     #[test]
+    fn reads_what_an_app_says_of_browsers() {
+        let json = r#"{"code":"MediaStudio","url":"https://m.example/","names":{},"status":"live","facades":[],
+            "browsers":{"recommended":["chromium"],"limitations":[{"engines":["gecko","webkit"],"texts":{"fr":"Pas de HEVC.","en":"No HEVC."}}]}}"#;
+        let app: App = serde_json::from_str(json).unwrap();
+        assert_eq!(app.browsers.recommended, ["chromium"]);
+        assert_eq!(app.browsers.limitations[0].text("fr").as_deref(), Some("Pas de HEVC."));
+        assert_eq!(app.browsers.limitations[0].text("ja").as_deref(), Some("No HEVC."));
+        // Absent (an older platform): nothing said, nothing shown.
+        let plain: App = serde_json::from_str(r#"{"code":"X","url":"u","status":"live"}"#).unwrap();
+        assert!(plain.browsers.recommended.is_empty() && plain.browsers.limitations.is_empty());
+        // A change of it is not a change of what the system holds.
+        assert!(app.for_system() == App { browsers: Browsers::default(), ..app.clone() });
+    }
+
+    #[test]
     fn the_brand_once() {
         let app = |en: &str, fr: &str| App {
             code: "X".into(),
@@ -297,6 +348,7 @@ mod tests {
             names: [("en".to_string(), en.to_string()), ("fr".to_string(), fr.to_string())].into(),
             status: "live".into(),
             facades: vec![],
+            browsers: Browsers::default(),
         };
         assert_eq!(app("Media Studio", "Media Studio").display_name("en"), "Kynoko Media Studio");
         assert_eq!(app("Kynoko Office", "Kynoko Office").display_name("fr"), "Kynoko Office");

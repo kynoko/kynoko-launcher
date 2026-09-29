@@ -6,10 +6,17 @@ interface Profile { id: string; name: string; default: boolean }
 interface Browser { id: string; name: string; engine: string; profiles: Profile[] }
 interface TypeGroup { facade: string; exts: { ext: string; on: boolean }[] }
 interface ShortcutItem { key: string; name: string; on: boolean }
-interface AppView { code: string; name: string; types: TypeGroup[]; associated: boolean; shortcutItems: ShortcutItem[]; browser: string | null; profile: string | null }
+interface Limit { engines: string[]; text: string }
+interface AppView {
+  code: string; name: string; types: TypeGroup[]; associated: boolean; shortcutItems: ShortcutItem[]; browser: string | null; profile: string | null;
+  /** Engines the app recommends, and what the user misses in others (its manifest). */
+  recommended: string[]; limitations: Limit[];
+}
 interface State {
   apps: AppView[];
   browsers: Browser[];
+  /** The browser "the system's" stands for, when known. */
+  systemBrowser: string | null;
   defaultBrowser: string | null;
   defaultProfile: string | null;
   version: string;
@@ -49,15 +56,40 @@ function labelOf(b: Browser): string {
   return b.id === EMBEDDED ? t(lang, 'EMBEDDED') : b.name;
 }
 
+/**
+ * The web engine `b` runs pages on, as apps speak of engines: the Kynoko
+ * window is WebView2 (Chromium) on Windows, WebKit on macOS and Linux.
+ */
+function engineOf(b: Browser | undefined, os: string): string | null {
+  if (!b) return null;
+  if (b.engine === 'embedded') return os === 'windows' ? 'chromium' : 'webkit';
+  return ['chromium', 'gecko', 'webkit'].includes(b.engine) ? b.engine : null;
+}
+
+/** The browser an app opens in: its own, else the default, else the system's. */
+function effectiveBrowser(state: State, app: AppView | null): Browser | undefined {
+  const id = app?.browser ?? state.defaultBrowser ?? state.systemBrowser;
+  return state.browsers.find((b) => b.id === id);
+}
+
 /** Whether the launcher can open `b` as an app window on this system. */
 function hasAppMode(b: Browser, os: string): boolean {
   return b.engine === 'chromium' || b.engine === 'embedded' || (b.engine === 'gecko' && os === 'windows');
 }
 
-function browserSelect(state: State, value: string | null, first: string, label: string, onChange: (id: string | null) => void) {
+/** A browser choice; for an app that recommends some, those come first, in their own group. */
+function browserSelect(state: State, value: string | null, first: string, label: string, onChange: (id: string | null) => void, app: AppView | null = null) {
   const select = el('select', { ariaLabel: label });
   select.append(el('option', { value: '' }, first));
-  for (const b of state.browsers) select.append(el('option', { value: b.id, selected: b.id === value }, labelOf(b)));
+  const option = (b: Browser) => el('option', { value: b.id, selected: b.id === value }, labelOf(b));
+  const good = state.browsers.filter((b) => app?.recommended.includes(engineOf(b, state.os) ?? ''));
+  if (good.length) {
+    const others = state.browsers.filter((b) => !good.includes(b));
+    select.append(el('optgroup', { label: t(lang, 'RECOMMENDED_GROUP') }, ...good.map(option)));
+    if (others.length) select.append(el('optgroup', { label: t(lang, 'OTHER_BROWSERS') }, ...others.map(option)));
+  } else {
+    for (const b of state.browsers) select.append(option(b));
+  }
   select.addEventListener('change', () => onChange(select.value || null));
   return select;
 }
@@ -268,10 +300,19 @@ async function render(): Promise<void> {
         // The app's browser, on its line: the choice made most often.
         el('span', { class: 'controls' },
           browserSelect(state, app.browser, t(lang, 'FOLLOW_DEFAULT'), t(lang, 'BROWSER_FOR', { app: app.name }),
-            (id) => void run(() => invoke('set_app_browser', { code: app.code, id }))),
+            (id) => void run(() => invoke('set_app_browser', { code: app.code, id })), app),
           ...[profileSelect(state, app.browser, app.profile, t(lang, 'PROFILE_FOR', { app: app.name }),
             (id) => void run(() => invoke('set_app_profile', { code: app.code, id })))].filter((x): x is HTMLSelectElement => !!x)),
         expand));
+    // What the app says the user will miss in the browser it opens in.
+    const browser = effectiveBrowser(state, app);
+    const engine = engineOf(browser, state.os);
+    const limits = engine ? app.limitations.filter((l) => l.engines.includes(engine)) : [];
+    if (browser && limits.length) {
+      card.append(el('div', { class: 'limits', role: 'note' },
+        el('strong', {}, t(lang, 'LIMITS_WITH', { browser: labelOf(browser) })),
+        ...limits.map((l) => el('span', {}, l.text))));
+    }
     if (expanded) {
       card.append(el('div', { class: 'app-body', id: bodyId },
         // File types: only for an app that opens files.

@@ -166,6 +166,15 @@ pre-generated static JSON document, so that serving it costs nothing:
 - The exact URL of the catalogue is to be decided with the platform (it goes
   through `api.kynoko.com`, trailing slash included). It must be overridable in
   Kynoko Launcher's settings for the dev domains.
+- `browsers` (per app, from the app's manifest since skeleton 0.93): the web
+  engines it recommends and, for the others, what the user will miss, one
+  sentence per limitation in every language:
+  `{ "recommended": ["chromium"], "limitations": [{ "engines": ["gecko"], "texts": { "fr": "...", "en": "..." } }] }`.
+  Engines are `chromium` (Chrome, Edge, Brave; the Kynoko window on Windows),
+  `gecko` (Firefox) and `webkit` (Safari; the Kynoko window on macOS and
+  Linux). The window marks the recommended browsers in each app's browser
+  choice, and shows the limitations of the browser the app opens in under the
+  app's line. A change of it rewrites no association and no shortcut.
 
 ### Refresh policy
 
@@ -600,4 +609,5 @@ catalogue in the system's language, falling back to English.
 | 2026-09-28 | Kynoko windows have no system title bar: the app's bar is the title bar (skeleton 0.91, KynokoNativeWindowService: its empty parts move the window, a double press maximizes it, window buttons at its end; macOS keeps its own over the bar's start). The page may only act on ITS OWN window, through own_window_* commands that take no target: Tauri's generic window commands would let it name another window (verified: they are refused, as are the launcher's commands). Every command is now listed in the app manifest, the settings window granted them explicitly. The window takes the page's title (taskbar, Alt+Tab). Files dropped on it reach the page. An isolated run skips the single-instance lock. |
 | 2026-09-28 | A Kynoko window never depends on its page to be movable and closable: a page that has not taken the title bar over (own_window_* call) 2.5 s after loading gets the system's title bar back (an older app version served by its service worker, the sign-in page, a payment page, an error page), and a page that takes it removes it again. The window opened for a file comes to the front with the focus: the instance a double-click starts lends the running launcher the right to bring windows forward (AllowSetForegroundWindow) before handing the file over. |
 | 2026-09-28 | "Open with" entries named after the app, the brand once ("Kynoko Office", "Kynoko Media Studio"), with the facade's icon. Windows: each associated app has its own program (`open-with\kynoko-<app>.exe`, a copy of the launcher's binary or a hard link to one) that hands over to the launcher at once, since Windows merges the entries sharing a program and names them after it; the ProgID's `Application\ApplicationName` / `ApplicationIcon` give the name and the icon (checked with SHAssocEnumHandlers, the list the "Open with" menu shows). A re-registration keeps the program instead of copying it again. Linux: the open entries named the same, the facade in their comment. macOS unchanged: one bundle, "Kynoko Launcher". |
+| 2026-09-29 | Each app says, in its manifest, the browser engines it recommends and what the user misses in the others (skeleton 0.93, relayed by the platform's catalogue): the window marks "(recommended)" in the app's browser choice and shows the limitations of the browser the app opens in (its own, the default, or the system's) under the app's line. The Kynoko window counts as Chromium on Windows (WebView2), WebKit on macOS and Linux. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

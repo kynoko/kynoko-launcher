@@ -39,7 +39,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::Bridge;
 use handoff::Handoff;
-use catalogue::{Cache, Catalogue, Refresh};
+use catalogue::{App, Cache, Catalogue, Refresh};
 use settings::{Inventory, Settings};
 
 /// How long a freshly opened session waits for its page before the agent
@@ -496,6 +496,17 @@ struct AppView {
     shortcut_items: Vec<ShortcutView>,
     browser: Option<String>,
     profile: Option<String>,
+    /// The engines the app recommends (see catalogue::Browsers).
+    recommended: Vec<String>,
+    /// What the user will miss per engine, in the window's language.
+    limitations: Vec<LimitView>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LimitView {
+    engines: Vec<String>,
+    text: String,
 }
 
 #[derive(Serialize)]
@@ -503,6 +514,8 @@ struct AppView {
 struct StateView {
     apps: Vec<AppView>,
     browsers: Vec<browsers::Browser>,
+    /// The browser "the system's" stands for (Windows: the https handler).
+    system_browser: Option<String>,
     default_browser: Option<String>,
     default_profile: Option<String>,
     /// The launcher's own version.
@@ -586,9 +599,17 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
                     .collect(),
                 browser: settings.app_browsers.get(&a.code).cloned(),
                 profile: settings.app_profiles.get(&a.code).cloned(),
+                recommended: a.browsers.recommended.clone(),
+                limitations: a
+                    .browsers
+                    .limitations
+                    .iter()
+                    .filter_map(|l| l.text(&lang).map(|text| LimitView { engines: l.engines.clone(), text }))
+                    .collect(),
             })
             .collect(),
         browsers: std::iter::once(browsers::embedded()).chain(browsers::installed()).collect(),
+        system_browser: browsers::system_default().map(|b| b.id),
         default_browser: settings.default_browser.clone(),
         default_profile: settings.default_profile.clone(),
         version: app.package_info().version.to_string(),
@@ -855,7 +876,7 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
     for code in settings.associated_apps.clone() {
         let (Some(before), after) = (old.app(&code), new.app(&code)) else { continue };
         // Types, facade names and routes: anything the system shows.
-        if after.map(|a| settings.chosen(a)) == Some(settings.chosen(before)) {
+        if after.map(|a| settings.chosen(&a.for_system())) == Some(settings.chosen(&before.for_system())) {
             continue;
         }
         match after {
@@ -870,7 +891,7 @@ fn reconcile(old: &Catalogue, new: &Catalogue) {
     }
     for code in settings.shortcut_apps.clone() {
         let (Some(before), after) = (old.app(&code), new.app(&code)) else { continue };
-        if after == Some(before) {
+        if after.map(App::for_system) == Some(before.for_system()) {
             continue;
         }
         let _ = shortcuts::remove(before, &lang, &mut inventory);

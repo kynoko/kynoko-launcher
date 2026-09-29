@@ -204,6 +204,15 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
 
 .field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
+/* What an app says the user will miss in the browser it opens in. */
+.limits {
+  grid-column: 1 / -1;
+  display: grid; gap: 2px; margin: 8px 0 0; padding: 8px 10px;
+  font-size: 0.82rem; line-height: 1.4; color: var(--kynoko-text);
+  border-radius: var(--kynoko-radius-sm);
+  background: rgba(245, 184, 61, 0.12); border: 1px solid rgba(245, 184, 61, 0.4);
+}
+.limits strong { font-weight: 700; }
 .error { color: var(--kynoko-danger); margin: 10px 0 0; }
 /* What "Check now" found. */
 .check-report { margin-block-start: 10px; font-size: 0.86rem; }
