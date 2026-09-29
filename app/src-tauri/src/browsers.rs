@@ -22,6 +22,12 @@ pub struct Browser {
     pub name: String,
     pub exe: String,
     pub engine: Engine,
+    /// The engine it renders pages with, which is what apps speak of (their
+    /// recommendations and limitations, see catalogue::Browsers). Opera is
+    /// Chromium there, though `engine` keeps it unknown for opening windows;
+    /// the Kynoko window is WebView2 on Windows, WebKit elsewhere.
+    #[serde(rename = "webEngine")]
+    pub web_engine: Engine,
     /// The browser's profiles. The Kynoko session and the Local Network
     /// Access permission belong to a profile, so the profile is part of the
     /// choice (docs/SPEC.md, section 5).
@@ -40,6 +46,17 @@ pub struct Profile {
     pub name: String,
     /// The one the browser opens by itself.
     pub default: bool,
+}
+
+/// The engine `exe` (a program, a bundle, a command line) renders pages with,
+/// knowing `engine`, the one it is opened as (see Browser::web_engine).
+pub fn web_engine_of(engine: &Engine, exe: &str) -> Engine {
+    match engine {
+        Engine::Unknown if exe.to_ascii_lowercase().contains("opera") => Engine::Chromium,
+        Engine::Embedded if cfg!(windows) => Engine::Chromium,
+        Engine::Embedded => Engine::Webkit,
+        other => other.clone(),
+    }
 }
 
 /// The engine, from the executable's name: it decides how a window is opened.
@@ -96,7 +113,8 @@ pub fn installed() -> Vec<Browser> {
                 Engine::Gecko => gecko_profiles(&id, &exe),
                 _ => Vec::new(),
             };
-            out.push(Browser { engine, id, name: resolve_indirect(name), command: vec![exe.clone()], exe, profiles });
+            let web_engine = web_engine_of(&engine, &exe);
+            out.push(Browser { engine, web_engine, id, name: resolve_indirect(name), command: vec![exe.clone()], exe, profiles });
         }
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -113,6 +131,7 @@ pub fn embedded() -> Browser {
         name: "Kynoko Launcher".to_string(),
         exe: String::new(),
         engine: Engine::Embedded,
+        web_engine: web_engine_of(&Engine::Embedded, ""),
         profiles: Vec::new(),
         command: Vec::new(),
     }
@@ -295,6 +314,13 @@ mod tests {
         assert_eq!(engine_of(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"), Engine::Chromium);
         assert_eq!(engine_of("/Applications/Safari.app/Contents/MacOS/Safari"), Engine::Webkit);
         assert_eq!(engine_of("unknown.exe"), Engine::Unknown);
+        // What pages are rendered with, which apps speak of.
+        let opera = r"C:\Users\u\AppData\Local\Programs\Opera\launcher.exe";
+        assert_eq!(engine_of(opera), Engine::Unknown);
+        assert_eq!(web_engine_of(&engine_of(opera), opera), Engine::Chromium);
+        assert_eq!(web_engine_of(&Engine::Gecko, "firefox.exe"), Engine::Gecko);
+        let window = if cfg!(windows) { Engine::Chromium } else { Engine::Webkit };
+        assert_eq!(web_engine_of(&Engine::Embedded, ""), window);
         assert_eq!(engine_of("/usr/bin/google-chrome-stable"), Engine::Chromium);
         assert_eq!(engine_of("/usr/bin/firefox-esr"), Engine::Gecko);
         assert_eq!(engine_of("microsoft-edge-beta"), Engine::Chromium);

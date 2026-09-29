@@ -100,7 +100,8 @@ pub fn browsers() -> Vec<Browser> {
             _ => vec!["open".to_string(), "-na".to_string(), app.clone(), "--args".to_string()],
         };
         let profiles = profiles(&engine, &id);
-        out.push(Browser { id, name, exe: app, engine, profiles, command });
+        let web_engine = crate::browsers::web_engine_of(&engine, &app);
+        out.push(Browser { id, name, exe: app, engine, web_engine, profiles, command });
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out

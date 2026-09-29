@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { Lang, pickLang, t } from './i18n';
 
 interface Profile { id: string; name: string; default: boolean }
-interface Browser { id: string; name: string; engine: string; profiles: Profile[] }
+interface Browser { id: string; name: string; engine: string; webEngine: string; profiles: Profile[] }
 interface TypeGroup { facade: string; exts: { ext: string; on: boolean }[] }
 interface ShortcutItem { key: string; name: string; on: boolean }
 interface Limit { engines: string[]; text: string }
@@ -57,13 +57,19 @@ function labelOf(b: Browser): string {
 }
 
 /**
- * The web engine `b` runs pages on, as apps speak of engines: the Kynoko
- * window is WebView2 (Chromium) on Windows, WebKit on macOS and Linux.
+ * The web engine `b` renders pages with, as apps speak of engines (the
+ * launcher says: the Kynoko window is WebView2 on Windows, WebKit elsewhere;
+ * Opera is Chromium).
  */
-function engineOf(b: Browser | undefined, os: string): string | null {
-  if (!b) return null;
-  if (b.engine === 'embedded') return os === 'windows' ? 'chromium' : 'webkit';
-  return ['chromium', 'gecko', 'webkit'].includes(b.engine) ? b.engine : null;
+function engineOf(b: Browser | undefined): string | null {
+  return b && ['chromium', 'gecko', 'webkit'].includes(b.webEngine) ? b.webEngine : null;
+}
+
+/** Well-known browsers of an engine, to suggest when none is installed. */
+function suggestionsFor(engine: string, os: string): string[] {
+  if (engine === 'chromium') return ['Google Chrome', 'Microsoft Edge', 'Brave'];
+  if (engine === 'gecko') return ['Firefox'];
+  return engine === 'webkit' && os === 'macos' ? ['Safari'] : [];
 }
 
 /** The browser an app opens in: its own, else the default, else the system's. */
@@ -82,7 +88,7 @@ function browserSelect(state: State, value: string | null, first: string, label:
   const select = el('select', { ariaLabel: label });
   select.append(el('option', { value: '' }, first));
   const option = (b: Browser) => el('option', { value: b.id, selected: b.id === value }, labelOf(b));
-  const good = state.browsers.filter((b) => app?.recommended.includes(engineOf(b, state.os) ?? ''));
+  const good = state.browsers.filter((b) => app?.recommended.includes(engineOf(b) ?? ''));
   if (good.length) {
     const others = state.browsers.filter((b) => !good.includes(b));
     select.append(el('optgroup', { label: t(lang, 'RECOMMENDED_GROUP') }, ...good.map(option)));
@@ -261,6 +267,20 @@ async function render(): Promise<void> {
   if (state.defaultBrowser === EMBEDDED || state.apps.some((a) => a.browser === EMBEDDED)) {
     browserCard.append(el('p', { class: 'note' }, t(lang, 'EMBEDDED_HINT')));
   }
+  // Apps none of whose recommended browsers is installed: some are named,
+  // once for all the apps that would name the same ones.
+  const missing = new Map<string, string[]>();
+  for (const app of state.apps) {
+    if (!app.recommended.length || state.browsers.some((b) => app.recommended.includes(engineOf(b) ?? ''))) continue;
+    const names = app.recommended.flatMap((e) => suggestionsFor(e, state.os));
+    if (!names.length) continue;
+    const browsers = new Intl.ListFormat(lang, { type: 'disjunction' }).format(names);
+    missing.set(browsers, [...(missing.get(browsers) ?? []), app.name]);
+  }
+  for (const [browsers, apps] of missing) {
+    const app = new Intl.ListFormat(lang, { type: 'conjunction' }).format(apps);
+    browserCard.append(el('p', { class: 'suggest', role: 'note' }, t(lang, 'RECOMMEND_INSTALL', { app, browsers })));
+  }
   root.append(browserCard);
 
   root.append(el('h2', {}, t(lang, 'APPS_TITLE')));
@@ -306,7 +326,7 @@ async function render(): Promise<void> {
         expand));
     // What the app says the user will miss in the browser it opens in.
     const browser = effectiveBrowser(state, app);
-    const engine = engineOf(browser, state.os);
+    const engine = engineOf(browser);
     const limits = engine ? app.limitations.filter((l) => l.engines.includes(engine)) : [];
     if (browser && limits.length) {
       card.append(el('div', { class: 'limits', role: 'note' },

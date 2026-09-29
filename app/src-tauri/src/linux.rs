@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::browsers::{engine_of, Browser, Engine, Profile};
+use crate::browsers::{engine_of, web_engine_of, Browser, Engine, Profile};
 use crate::catalogue::App;
 use crate::settings::{Artefact, Inventory, Settings};
 use crate::xdg;
@@ -77,11 +77,13 @@ pub fn browsers() -> Vec<Browser> {
             let flatpak = command.first().map(|c| c.ends_with("flatpak")).unwrap_or(false);
             let flatpak_id = if flatpak { command.iter().skip_while(|a| *a != "run").skip(1).find(|a| !a.starts_with('-')).cloned() } else { None };
             let profiles = profiles(&engine, &program, flatpak_id.as_deref());
+            let web_engine = web_engine_of(&engine, &command.join(" "));
             out.push(Browser {
                 id,
                 name: e.get("Name").cloned().unwrap_or(program.clone()),
                 exe: command[0].clone(),
                 engine,
+                web_engine,
                 profiles,
                 command,
             });
