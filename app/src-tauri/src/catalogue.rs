@@ -34,7 +34,8 @@ pub struct App {
 /// An app's word on browsers: the engines it recommends, and what the user
 /// will miss in the others. Engines: `chromium` (Chrome, Edge, Brave, and the
 /// Kynoko window on Windows), `gecko` (Firefox), `webkit` (Safari, and the
-/// Kynoko window on macOS and Linux).
+/// Kynoko window on macOS and Linux). `recommended` may also name `kynoko`:
+/// the Kynoko window itself, whatever its engine.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 pub struct Browsers {
     #[serde(default)]
@@ -49,6 +50,10 @@ pub struct Limitation {
     /// One sentence, per language.
     #[serde(default)]
     pub texts: HashMap<String, String>,
+    /// What only browsers miss: the Kynoko window of the same engine has it,
+    /// through the launcher (the computer's fonts, for one).
+    #[serde(default, rename = "browsersOnly")]
+    pub browsers_only: bool,
 }
 
 impl Limitation {
@@ -333,6 +338,15 @@ mod tests {
         assert_eq!(app.browsers.recommended, ["chromium"]);
         assert_eq!(app.browsers.limitations[0].text("fr").as_deref(), Some("Pas de HEVC."));
         assert_eq!(app.browsers.limitations[0].text("ja").as_deref(), Some("No HEVC."));
+        assert!(!app.browsers.limitations[0].browsers_only);
+        // The Kynoko window recommended, and what only browsers miss.
+        let office: App = serde_json::from_str(
+            r#"{"code":"Office","url":"u","status":"live","browsers":{"recommended":["kynoko"],
+            "limitations":[{"engines":["gecko","webkit"],"browsersOnly":true,"texts":{"en":"No fonts."}}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(office.browsers.recommended, ["kynoko"]);
+        assert!(office.browsers.limitations[0].browsers_only);
         // Absent (an older platform): nothing said, nothing shown.
         let plain: App = serde_json::from_str(r#"{"code":"X","url":"u","status":"live"}"#).unwrap();
         assert!(plain.browsers.recommended.is_empty() && plain.browsers.limitations.is_empty());

@@ -172,7 +172,12 @@ pre-generated static JSON document, so that serving it costs nothing:
   `{ "recommended": ["chromium"], "limitations": [{ "engines": ["gecko"], "texts": { "fr": "...", "en": "..." } }] }`.
   Engines are `chromium` (Chrome, Edge, Brave; the Kynoko window on Windows),
   `gecko` (Firefox) and `webkit` (Safari; the Kynoko window on macOS and
-  Linux). The window marks the recommended browsers in each app's browser
+  Linux). `recommended` may also name `kynoko`: the Kynoko window itself,
+  whatever its engine (skeleton 0.94). A limitation marked
+  `"browsersOnly": true` is one the Kynoko window of that engine does not have,
+  because the launcher provides it (the computer's fonts, section 10); the
+  others stay true of it, even when the app recommends it (WebKit's, on macOS
+  and Linux). The window marks the recommended browsers in each app's browser
   choice, and shows the limitations of the browser the app opens in under the
   app's line. A change of it rewrites no association and no shortcut.
 
@@ -459,6 +464,14 @@ in `0-template`, then adopted by Office, Photo Studio and Media Studio.
 - **Install invitation on desktop**: the "Install" banner and menu entry offer
   to download Kynoko Launcher for the detected OS, instead of the browser's
   PWA prompt. Mobile keeps the current PWA flows.
+- **The computer's fonts** (skeleton 0.94, `KynokoSystemFontsService`): a page
+  cannot list them by itself (the list tells computers apart). In a Kynoko
+  window, the launcher's `system_fonts` command answers, on every system:
+  family names with their weights, italic and monospace, never a font file
+  (a font is licensed to the computer; the engine finds it by its name). In a
+  Chromium browser, `queryLocalFonts()` answers after the browser's own
+  permission prompt. Firefox and Safari have neither. The list stays in the
+  page: it is never sent to a server.
 
 ## 11. Install, uninstall, cleanup
 
@@ -610,4 +623,5 @@ catalogue in the system's language, falling back to English.
 | 2026-09-28 | A Kynoko window never depends on its page to be movable and closable: a page that has not taken the title bar over (own_window_* call) 2.5 s after loading gets the system's title bar back (an older app version served by its service worker, the sign-in page, a payment page, an error page), and a page that takes it removes it again. The window opened for a file comes to the front with the focus: the instance a double-click starts lends the running launcher the right to bring windows forward (AllowSetForegroundWindow) before handing the file over. |
 | 2026-09-28 | "Open with" entries named after the app, the brand once ("Kynoko Office", "Kynoko Media Studio"), with the facade's icon. Windows: each associated app has its own program (`open-with\kynoko-<app>.exe`, a copy of the launcher's binary or a hard link to one) that hands over to the launcher at once, since Windows merges the entries sharing a program and names them after it; the ProgID's `Application\ApplicationName` / `ApplicationIcon` give the name and the icon (checked with SHAssocEnumHandlers, the list the "Open with" menu shows). A re-registration keeps the program instead of copying it again. Linux: the open entries named the same, the facade in their comment. macOS unchanged: one bundle, "Kynoko Launcher". |
 | 2026-09-29 | Each app says, in its manifest, the browser engines it recommends and what the user misses in the others (skeleton 0.93, relayed by the platform's catalogue): the window marks "(recommended)" in the app's browser choice and shows the limitations of the browser the app opens in (its own, the default, or the system's) under the app's line. The Kynoko window counts as Chromium on Windows (WebView2), WebKit on macOS and Linux. |
+| 2026-09-30 | The computer's fonts for the apps: a Kynoko window's page may call `system_fonts` (capability "kynoko-window", Kynoko origins only), which lists the families installed on the computer (fontdb, MIT: Windows' system and per-user folders, macOS' Library folders, fontconfig on Linux; ~60 ms for 750 faces, once per run, off the window's thread). Names, weights, italic and monospace only, never a font file: the engine draws a family from its name, and nothing copies a font that is licensed to the computer. Names follow the typographic family, as CSS and `queryLocalFonts()` do (Segoe UI Semibold is Segoe UI at 600), so a document names its fonts the same way in Chrome and in a Kynoko window. An app may recommend the Kynoko window itself (`kynoko`, Office first) and mark a limitation `browsersOnly` (what the launcher gives the Kynoko window of that engine). |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

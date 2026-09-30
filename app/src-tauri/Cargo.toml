@@ -24,6 +24,7 @@ getrandom = "0.2"
 dirs = "5"
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+fontdb = "0.24.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

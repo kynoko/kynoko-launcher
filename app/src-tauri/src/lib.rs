@@ -17,6 +17,7 @@ mod assoc;
 mod bridge;
 mod browsers;
 mod catalogue;
+mod fonts;
 mod handoff;
 mod launch;
 #[cfg(target_os = "linux")]
@@ -342,6 +343,16 @@ fn own_window_close(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// The font families of this computer, for a Kynoko window's page (an app's
+/// font menus; see fonts.rs). Names only, never a font file. Read off the
+/// window's thread, once per run.
+#[tauri::command]
+async fn system_fonts() -> Result<Vec<fonts::Family>, String> {
+    tauri::async_runtime::spawn_blocking(|| fonts::families().to_vec())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Page loads of a Kynoko window: a page that has not taken the title bar
 /// TITLE_BAR_GRACE after loading gets the system's back.
 fn watch_title_bar(window: tauri::WebviewWindow, event: tauri::webview::PageLoadEvent) {
@@ -496,7 +507,8 @@ struct AppView {
     shortcut_items: Vec<ShortcutView>,
     browser: Option<String>,
     profile: Option<String>,
-    /// The engines the app recommends (see catalogue::Browsers).
+    /// The engines the app recommends, and `kynoko` for the Kynoko window
+    /// (see catalogue::Browsers).
     recommended: Vec<String>,
     /// What the user will miss per engine, in the window's language.
     limitations: Vec<LimitView>,
@@ -507,6 +519,8 @@ struct AppView {
 struct LimitView {
     engines: Vec<String>,
     text: String,
+    /// Not said of the Kynoko window (catalogue::Limitation::browsers_only).
+    browsers_only: bool,
 }
 
 #[derive(Serialize)]
@@ -604,7 +618,9 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
                     .browsers
                     .limitations
                     .iter()
-                    .filter_map(|l| l.text(&lang).map(|text| LimitView { engines: l.engines.clone(), text }))
+                    .filter_map(|l| {
+                        l.text(&lang).map(|text| LimitView { engines: l.engines.clone(), text, browsers_only: l.browsers_only })
+                    })
                     .collect(),
             })
             .collect(),
@@ -1089,6 +1105,7 @@ pub fn run() {
             own_window_toggle_maximize,
             own_window_is_maximized,
             own_window_close,
+            system_fonts,
             app_icon,
             set_shortcuts,
             check_catalogue,

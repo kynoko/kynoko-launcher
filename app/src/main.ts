@@ -6,10 +6,14 @@ interface Profile { id: string; name: string; default: boolean }
 interface Browser { id: string; name: string; engine: string; webEngine: string; profiles: Profile[] }
 interface TypeGroup { facade: string; exts: { ext: string; on: boolean }[] }
 interface ShortcutItem { key: string; name: string; on: boolean }
-interface Limit { engines: string[]; text: string }
+/** `browsersOnly`: what the Kynoko window of that engine does not miss (the launcher provides it). */
+interface Limit { engines: string[]; text: string; browsersOnly: boolean }
 interface AppView {
   code: string; name: string; types: TypeGroup[]; associated: boolean; shortcutItems: ShortcutItem[]; browser: string | null; profile: string | null;
-  /** Engines the app recommends, and what the user misses in others (its manifest). */
+  /**
+   * Engines the app recommends (and `kynoko`: the Kynoko window itself), and
+   * what the user misses in others (its manifest).
+   */
   recommended: string[]; limitations: Limit[];
 }
 interface State {
@@ -65,6 +69,28 @@ function engineOf(b: Browser | undefined): string | null {
   return b && ['chromium', 'gecko', 'webkit'].includes(b.webEngine) ? b.webEngine : null;
 }
 
+/**
+ * Whether `app` recommends `b`: by the engine it renders with, or, for the
+ * Kynoko window, by name (`kynoko`), whatever its engine.
+ */
+function recommends(app: AppView | null, b: Browser): boolean {
+  if (!app) return false;
+  if (b.id === EMBEDDED && app.recommended.includes('kynoko')) return true;
+  return app.recommended.includes(engineOf(b) ?? '');
+}
+
+/**
+ * What the user misses in `b`, for `app`: its engine's limitations, unless the
+ * app recommends that engine. The Kynoko window is spared those that only
+ * browsers have, but keeps its engine's others (WebKit's, on macOS and Linux),
+ * even when the app recommends it.
+ */
+function limitsOf(app: AppView, b: Browser | undefined): Limit[] {
+  const engine = engineOf(b);
+  if (!b || !engine || app.recommended.includes(engine)) return [];
+  return app.limitations.filter((l) => l.engines.includes(engine) && !(b.id === EMBEDDED && l.browsersOnly));
+}
+
 /** Well-known browsers of an engine, to suggest when none is installed. */
 function suggestionsFor(engine: string, os: string): string[] {
   if (engine === 'chromium') return ['Google Chrome', 'Microsoft Edge', 'Brave'];
@@ -99,7 +125,7 @@ function browserSelect(state: State, value: string | null, first: string, label:
   const select = el('select', { ariaLabel: label });
   select.append(el('option', { value: '' }, first));
   const option = (b: Browser) => el('option', { value: b.id, selected: b.id === value }, labelOf(b));
-  const good = state.browsers.filter((b) => app?.recommended.includes(engineOf(b) ?? ''));
+  const good = state.browsers.filter((b) => recommends(app, b));
   if (good.length) {
     const others = state.browsers.filter((b) => !good.includes(b));
     select.append(el('optgroup', { label: t(lang, 'RECOMMENDED_GROUP') }, ...good.map(option)));
@@ -318,11 +344,10 @@ async function render(): Promise<void> {
     // What the app says the user will miss in the browser it opens in.
     const browser = effectiveBrowser(state, app);
     if (app.browser) card.append(...browserNotes(browser, state.os));
-    const engine = engineOf(browser);
-    const limits = engine && !app.recommended.includes(engine) ? app.limitations.filter((l) => l.engines.includes(engine)) : [];
+    const limits = limitsOf(app, browser);
     // None of the browsers the app recommends is installed: some are named,
-    // here, where the app's browser is chosen.
-    const names = app.recommended.length && !state.browsers.some((b) => app.recommended.includes(engineOf(b) ?? ''))
+    // here, where the app's browser is chosen. (The Kynoko window always is.)
+    const names = app.recommended.length && !state.browsers.some((b) => recommends(app, b))
       ? app.recommended.flatMap((e) => suggestionsFor(e, state.os))
       : [];
     const suggestion = names.length

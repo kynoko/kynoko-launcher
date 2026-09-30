@@ -1,8 +1,8 @@
 fn main() {
     // Every command is listed, so that each gets its own permission: the
     // settings window is granted the launcher's commands (capability
-    // "default"), a Kynoko window's page only the own_window_* ones
-    // (capability "kynoko-window").
+    // "default"), a Kynoko window's page only the own_window_* ones and
+    // system_fonts (capability "kynoko-window").
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
         "get_state",
         "set_default_browser",
@@ -24,6 +24,7 @@ fn main() {
         "own_window_toggle_maximize",
         "own_window_is_maximized",
         "own_window_close",
+        "system_fonts",
     ])))
     .expect("failed to run the tauri build script")
 }
