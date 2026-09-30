@@ -24,6 +24,7 @@ mod launch;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+mod ondisk;
 #[cfg(windows)]
 mod programs;
 mod settings;

@@ -365,7 +365,9 @@ Validated in phase 0 with Edge 154 and Firefox 156 (`spikes/loopback-bridge`).
 | `OPTIONS` | any | `204`, CORS preflight (methods `GET, PUT, POST, DELETE`; headers `If-Match, Content-Type`); `Access-Control-Allow-Private-Network: true` when asked |
 | `GET` | `/s/<token>/meta` | `200` `{ name, size, etag }`; `410` if the file is gone |
 | `GET` | `/s/<token>/content` | `200` streamed bytes, `ETag` exposed |
-| `PUT` | `/s/<token>/content` | Requires `If-Match: <etag>`. `200` `{ etag }`; `412` + current `ETag` if the file changed on disk; `409` if it cannot be written (locked by another program) |
+| `PUT` | `/s/<token>/content` | Requires `If-Match: <etag>`. `200` `{ etag }`; `412` + current `ETag` if the file changed on disk; `409` `{ reason, holders, detail }` if it cannot be written: `reason` is `locked` (another program holds it; `holders` names the programs, from the Windows Restart Manager), `readonly`, `denied` (permissions, a protected folder) or `failed`; `detail` is the system's message. Launchers before 0.2.18 answered a plain-text `409` for all of these |
+| `POST` | `/s/<token>/copy?suffix=<word>` | The body written BESIDE the file, as `<stem> (<word>)<ext>` (`word`: the page's own for "copy", kept to letters, digits and spaces), and to that same copy again on the next call of the session. `200` `{ name, path }` (the full path, for the page to say where the work went); `409` as for `PUT`. Launchers before 0.2.18 answer `405` |
+| `POST` | `/s/<token>/reveal?which=file\|copy` | The file or its copy shown selected in the system's file manager (Explorer `/select`, Finder `open -R`, freedesktop `FileManager1.ShowItems` else the folder). `204`; `404` when there is no copy. Only these two paths: a session names no other |
 | `POST` | `/s/<token>/heartbeat` | `204` |
 | `DELETE` | `/s/<token>` | `204`, session closed |
 | other | | `404` (unknown token) / `405` |
@@ -388,6 +390,16 @@ Every response carries `Access-Control-Allow-Origin: <origin>`,
 - The ETag is `"<mtime ns hex>-<size hex>"`. A change on disk between read and
   write gives `412`; the app must then offer: overwrite, save as a copy, or
   reload.
+- Windows: `ReplaceFileW` is given a BACKUP name (`.<name>.<random>.kynoko-old`,
+  deleted after the swap). Without one, its error 1176 means "the original is
+  deleted and the new content is still under the temporary name", which the
+  cleanup then deleted too; with one, 1175 and 1176 leave both files where
+  they were, and 1177 leaves the original under the backup's name, from where
+  it is renamed back.
+- A lock (sharing or lock violation, `ReplaceFileW` 1175-1177) is tried again
+  for about two seconds (100, 200, 400, 600, 800 ms) before the write is
+  refused: an antivirus or the indexer reading the file just written, a sync
+  client, Explorer's preview pane hold a file only briefly.
 
 ### Measured (phase 0, Windows 11)
 
@@ -624,4 +636,5 @@ catalogue in the system's language, falling back to English.
 | 2026-09-28 | "Open with" entries named after the app, the brand once ("Kynoko Office", "Kynoko Media Studio"), with the facade's icon. Windows: each associated app has its own program (`open-with\kynoko-<app>.exe`, a copy of the launcher's binary or a hard link to one) that hands over to the launcher at once, since Windows merges the entries sharing a program and names them after it; the ProgID's `Application\ApplicationName` / `ApplicationIcon` give the name and the icon (checked with SHAssocEnumHandlers, the list the "Open with" menu shows). A re-registration keeps the program instead of copying it again. Linux: the open entries named the same, the facade in their comment. macOS unchanged: one bundle, "Kynoko Launcher". |
 | 2026-09-29 | Each app says, in its manifest, the browser engines it recommends and what the user misses in the others (skeleton 0.93, relayed by the platform's catalogue): the window marks "(recommended)" in the app's browser choice and shows the limitations of the browser the app opens in (its own, the default, or the system's) under the app's line. The Kynoko window counts as Chromium on Windows (WebView2), WebKit on macOS and Linux. |
 | 2026-09-30 | The computer's fonts for the apps: a Kynoko window's page may call `system_fonts` (capability "kynoko-window", Kynoko origins only), which lists the families installed on the computer (fontdb, MIT: Windows' system and per-user folders, macOS' Library folders, fontconfig on Linux; ~60 ms for 750 faces, once per run, off the window's thread). Names, weights, italic and monospace only, never a font file: the engine draws a family from its name, and nothing copies a font that is licensed to the computer. Names follow the typographic family, as CSS and `queryLocalFonts()` do (Segoe UI Semibold is Segoe UI at 600), so a document names its fonts the same way in Chrome and in a Kynoko window. An app may recommend the Kynoko window itself (`kynoko`, Office first) and mark a limitation `browsersOnly` (what the launcher gives the Kynoko window of that engine). |
+| 2026-09-30 | A refused save says why and where the work went: the bridge answers a `409` with the reason (locked, read-only, denied, failed), the programs holding the file (Windows Restart Manager) and the system's message; it waits out brief locks (about two seconds); `POST copy` writes the work beside the file (`<name> (<word>).<ext>`, the same copy on each refusal of the session) and answers its full path; `POST reveal` shows the file or the copy selected in the file manager. `ReplaceFileW` now gets a backup name, which makes each of its failures recoverable (before, a 1176 could lose the new content). |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

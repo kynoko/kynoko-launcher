@@ -13,6 +13,8 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
+use crate::ondisk;
+
 /// A session with no request for this long is over (the page heartbeats every 30 s).
 const SESSION_IDLE: Duration = Duration::from_secs(600);
 
@@ -23,6 +25,9 @@ struct Session {
     /// Told to `on_reached` at the page's first authorized request: proof
     /// that its browser lets that origin reach the launcher.
     key: Option<String>,
+    /// The copy written beside the file when it could not be replaced: the
+    /// next copies go to it rather than to "copy 2", "copy 3"...
+    copy: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -57,7 +62,7 @@ impl Bridge {
         self.sessions
             .lock()
             .expect("sessions lock")
-            .insert(token.clone(), Session { path, origin, last_seen: Instant::now(), key });
+            .insert(token.clone(), Session { path, origin, last_seen: Instant::now(), key, copy: None });
         token
     }
 
@@ -117,7 +122,8 @@ impl Bridge {
             return reply(req, &allowed, 204, "", &extra);
         }
 
-        match (req.method().clone(), rest) {
+        let (route, query) = rest.split_once('?').unwrap_or((rest, ""));
+        match (req.method().clone(), route) {
             (Method::Get, "meta") => match etag(&path) {
                 Ok((tag, size)) => {
                     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -134,6 +140,8 @@ impl Bridge {
                 (Err(e), _) | (_, Err(e)) => reply(req, &allowed, 410, &format!("file gone: {e}"), &[]),
             },
             (Method::Put, "content") => self.put(req, &path, &allowed),
+            (Method::Post, "copy") => self.copy(req, &token, &path, &allowed, query),
+            (Method::Post, "reveal") => self.reveal(req, &token, &path, &allowed, query),
             (Method::Post, "heartbeat") => reply(req, &allowed, 204, "", &[]),
             (Method::Delete, "") => {
                 self.sessions.lock().expect("sessions lock").remove(&token);
@@ -154,23 +162,77 @@ impl Bridge {
                 let body = serde_json::json!({ "etag": tag }).to_string();
                 reply(req, allowed, 200, &body, &[("ETag", tag), ("Content-Type", "application/json".to_string())])
             }
-            Err(e) => reply(req, allowed, 409, &format!("cannot write: {e}"), &[]),
+            Err(e) => refused(req, allowed, &e, path),
         }
     }
+
+    /// The page's work, when the file itself cannot take it: written BESIDE
+    /// it, under "<name> (<suffix>)" (the page's word for "copy", in its
+    /// language), and again to that same copy on the next refusal. Answers
+    /// the copy's name and full path, for the page to say where it went.
+    fn copy(&self, mut req: Request, token: &str, path: &Path, allowed: &str, query: &str) {
+        let suffix = copy_suffix(query_value(query, "suffix").as_deref());
+        let kept = self.sessions.lock().expect("sessions lock").get(token).and_then(|s| s.copy.clone());
+        let target = kept.filter(|p| p.exists()).unwrap_or_else(|| free_copy_name(path, &suffix));
+        let written =
+            if target.exists() { write_in_place(&target, req.as_reader()) } else { write_new(&target, req.as_reader()) };
+        match written {
+            Ok(()) => {
+                if let Some(session) = self.sessions.lock().expect("sessions lock").get_mut(token) {
+                    session.copy = Some(target.clone());
+                }
+                let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let body = serde_json::json!({ "name": name, "path": target.display().to_string() }).to_string();
+                reply(req, allowed, 200, &body, &[("Content-Type", "application/json".to_string())])
+            }
+            Err(e) => refused(req, allowed, &e, &target),
+        }
+    }
+
+    /// Shows the file (`which=file`) or its copy (`which=copy`) selected in the
+    /// system's file manager. Only these two: a session names no other path.
+    fn reveal(&self, req: Request, token: &str, path: &Path, allowed: &str, query: &str) {
+        let target = match query_value(query, "which").as_deref() {
+            Some("copy") => self.sessions.lock().expect("sessions lock").get(token).and_then(|s| s.copy.clone()),
+            _ => Some(path.to_path_buf()),
+        };
+        match target.filter(|p| p.exists()) {
+            Some(p) => match ondisk::reveal(&p) {
+                Ok(()) => reply(req, allowed, 204, "", &[]),
+                Err(e) => reply(req, allowed, 500, &format!("cannot show: {e}"), &[]),
+            },
+            None => reply(req, allowed, 404, "nothing to show", &[]),
+        }
+    }
+}
+
+/// A write the system refused, said so the page can word it: why (locked,
+/// read-only, denied, failed), who holds the file when that is the reason,
+/// and the system's own message. 409, as before, for older pages.
+fn refused(req: Request, allowed: &str, error: &io::Error, path: &Path) {
+    let why = ondisk::Refusal::of(error, path);
+    let holders = if why == ondisk::Refusal::Locked { ondisk::holders(path) } else { Vec::new() };
+    let body = serde_json::json!({ "reason": why.word(), "holders": holders, "detail": error.to_string() }).to_string();
+    reply(req, allowed, 409, &body, &[("Content-Type", "application/json".to_string())])
+}
+
+/// A file beside `path`, hidden-ish and unique: `.<name>.<random>.<ending>`.
+fn sibling(path: &Path, ending: &str) -> PathBuf {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    dir.join(format!(".{name}.{}.{ending}", &random_token()[..8]))
 }
 
 /// The body goes to a temporary file in the SAME directory, synced, then
 /// swaps with the original. A crash leaves the old file or the new one.
 fn write_in_place(path: &Path, body: &mut dyn Read) -> io::Result<()> {
-    let dir = path.parent().unwrap_or(Path::new("."));
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let tmp = dir.join(format!(".{name}.{}.kynoko-tmp", &random_token()[..8]));
+    let tmp = sibling(path, "kynoko-tmp");
     let result = (|| {
         let mut out = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
         io::copy(body, &mut out)?;
         out.sync_all()?;
         drop(out);
-        swap(&tmp, path)
+        swap_patiently(&tmp, path)
     })();
     if result.is_err() {
         let _ = fs::remove_file(&tmp);
@@ -178,30 +240,74 @@ fn write_in_place(path: &Path, body: &mut dyn Read) -> io::Result<()> {
     result
 }
 
+/// A file that does not exist yet: written aside, then renamed into place.
+fn write_new(path: &Path, body: &mut dyn Read) -> io::Result<()> {
+    let tmp = sibling(path, "kynoko-tmp");
+    let result = (|| {
+        let mut out = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+        io::copy(body, &mut out)?;
+        out.sync_all()?;
+        drop(out);
+        fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Brief holds by other programs pass - an antivirus or the indexer reading
+/// the file just written, a sync client, Explorer's preview pane - so the swap
+/// is tried again for about two seconds before the file is said to be locked.
+fn swap_patiently(tmp: &Path, target: &Path) -> io::Result<()> {
+    let mut waits = [100u64, 200, 400, 600, 800].into_iter();
+    loop {
+        match swap(tmp, target) {
+            Err(e) if ondisk::is_lock(&e) => match waits.next() {
+                Some(ms) => thread::sleep(Duration::from_millis(ms)),
+                None => return Err(e),
+            },
+            done => return done,
+        }
+    }
+}
+
 /// Windows: ReplaceFileW keeps what a rename loses (ACLs, attributes,
 /// alternate data streams, the file's identity for other programs).
+///
+/// A BACKUP NAME IS GIVEN, and it is what makes every failure recoverable:
+/// without one, ReplaceFileW's 1176 means "the original is deleted and the
+/// new content is still under the temporary name" - which the caller then
+/// deleted. With one, 1175 and 1176 leave both files where they were, and
+/// 1177 leaves the original under the backup's name, from where it goes back.
 #[cfg(windows)]
 fn swap(tmp: &Path, target: &Path) -> io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{ReplaceFileW, REPLACEFILE_IGNORE_MERGE_ERRORS};
     let wide = |p: &Path| p.as_os_str().encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>();
-    let (target_w, tmp_w) = (wide(target), wide(tmp));
-    // SAFETY: both buffers are NUL-terminated UTF-16 paths that outlive the call.
+    let backup = sibling(target, "kynoko-old");
+    let (target_w, tmp_w, backup_w) = (wide(target), wide(tmp), wide(&backup));
+    // SAFETY: the three buffers are NUL-terminated UTF-16 paths that outlive the call.
     let ok = unsafe {
         ReplaceFileW(
             target_w.as_ptr(),
             tmp_w.as_ptr(),
-            std::ptr::null(),
+            backup_w.as_ptr(),
             REPLACEFILE_IGNORE_MERGE_ERRORS,
             std::ptr::null(),
             std::ptr::null(),
         )
     };
     if ok != 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
+        // The original, set aside by the swap, is not needed any more.
+        let _ = fs::remove_file(&backup);
+        return Ok(());
     }
+    let error = io::Error::last_os_error();
+    if error.raw_os_error() == Some(1177) && backup.exists() && !target.exists() {
+        let _ = fs::rename(&backup, target);
+    }
+    Err(error)
 }
 
 #[cfg(not(windows))]
@@ -211,6 +317,60 @@ fn swap(tmp: &Path, target: &Path) -> io::Result<()> {
         let _ = fs::set_permissions(tmp, meta.permissions());
     }
     fs::rename(tmp, target)
+}
+
+/// One `key=value` of a query string, percent-decoded (the page's word for
+/// "copy" may be Japanese or Arabic).
+fn query_value(query: &str, key: &str) -> Option<String> {
+    let raw = query.split('&').find_map(|pair| pair.strip_prefix(key)?.strip_prefix('='))?;
+    let bytes = raw.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = bytes
+            .get(i + 1..i + 3)
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (bytes[i], hex) {
+            (b'%', Some(b)) => {
+                out.push(b);
+                i += 3;
+            }
+            (b'+', _) => {
+                out.push(b' ');
+                i += 1;
+            }
+            (b, _) => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    Some(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// The page's word for "copy", kept to letters, digits and spaces (it goes
+/// into a file name), 24 characters at most; "copy" when it gave none.
+fn copy_suffix(raw: Option<&str>) -> String {
+    let word: String = raw.unwrap_or("").chars().filter(|c| c.is_alphanumeric() || *c == ' ').take(24).collect();
+    let word = word.trim().to_string();
+    if word.is_empty() { "copy".to_string() } else { word }
+}
+
+/// "<stem> (<suffix>)<ext>" beside `path`, then "(<suffix> 2)"... the first
+/// name no file has.
+fn free_copy_name(path: &Path, suffix: &str) -> PathBuf {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    for n in 1..100 {
+        let label = if n == 1 { suffix.to_string() } else { format!("{suffix} {n}") };
+        let candidate = dir.join(format!("{stem} ({label}){ext}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    dir.join(format!("{stem} ({suffix} {}){ext}", &random_token()[..6]))
 }
 
 fn etag(path: &Path) -> io::Result<(String, u64)> {
@@ -253,4 +413,148 @@ fn random_token() -> String {
 /// Constant-time comparison: the token must not leak through response timing.
 fn same(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("kynoko-bridge-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Only the file, and whatever the test itself added: no temporary or
+    /// backup file is ever left behind.
+    fn names(dir: &Path) -> Vec<String> {
+        let mut all: Vec<String> =
+            fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        all.sort();
+        all
+    }
+
+    #[test]
+    fn writes_in_place_and_leaves_nothing_behind() {
+        let dir = scratch("write");
+        let file = dir.join("notes.txt");
+        fs::write(&file, "old").unwrap();
+        write_in_place(&file, &mut "new".as_bytes()).unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), "new");
+        assert_eq!(names(&dir), ["notes.txt"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn copies_are_named_beside_the_file_and_count_up() {
+        let dir = scratch("copies");
+        let file = dir.join("notes-audience.txt");
+        fs::write(&file, "x").unwrap();
+        assert_eq!(free_copy_name(&file, "copie"), dir.join("notes-audience (copie).txt"));
+        fs::write(dir.join("notes-audience (copie).txt"), "x").unwrap();
+        assert_eq!(free_copy_name(&file, "copie"), dir.join("notes-audience (copie 2).txt"));
+        assert_eq!(free_copy_name(&dir.join("Makefile"), "copy"), dir.join("Makefile (copy)"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_copy_suffix_is_a_word_and_nothing_else() {
+        assert_eq!(copy_suffix(Some("copie")), "copie");
+        assert_eq!(copy_suffix(Some(r"../..\co/pie")), "copie");
+        assert_eq!(copy_suffix(Some("コピー")), "コピー");
+        assert_eq!(copy_suffix(Some("   ")), "copy");
+        assert_eq!(copy_suffix(None), "copy");
+        assert_eq!(query_value("which=copy&suffix=%E3%82%B3%E3%83%94%E3%83%BC", "suffix").as_deref(), Some("コピー"));
+        assert_eq!(query_value("suffix=copie+2", "suffix").as_deref(), Some("copie 2"));
+        assert_eq!(query_value("suffix=%zz", "suffix").as_deref(), Some("%zz"));
+        assert_eq!(query_value("which=copy", "suffix"), None);
+    }
+
+    /// The whole route, over HTTP as the page speaks it: a held file refuses
+    /// with a JSON 409 naming who holds it, the work goes beside it, and the
+    /// next refusal writes that same copy again.
+    #[cfg(windows)]
+    #[test]
+    fn a_refused_save_goes_beside_the_file() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = scratch("beside");
+        let file = dir.join("notes-audience.txt");
+        fs::write(&file, "old").unwrap();
+        let bridge = Bridge::start(|_| {}).unwrap();
+        let origin = "https://office.kynoko.com".to_string();
+        let token = bridge.open(file.clone(), origin.clone(), None);
+        let base = format!("http://127.0.0.1:{}/s/{token}", bridge.port);
+        let (tag, _) = etag(&file).unwrap();
+        let held = OpenOptions::new().read(true).share_mode(0).open(&file).unwrap();
+
+        match ureq::put(&format!("{base}/content")).set("Origin", &origin).set("If-Match", &tag).send_string("new") {
+            Err(ureq::Error::Status(409, answer)) => {
+                let body: serde_json::Value = answer.into_json().unwrap();
+                assert_eq!(body["reason"], "locked");
+                assert!(!body["holders"].as_array().unwrap().is_empty(), "{body}");
+            }
+            other => panic!("expected a 409, got {other:?}"),
+        }
+        let copy = |text: &str| -> serde_json::Value {
+            ureq::post(&format!("{base}/copy?suffix=copie"))
+                .set("Origin", &origin)
+                .send_string(text)
+                .unwrap()
+                .into_json()
+                .unwrap()
+        };
+        let first = copy("new");
+        assert_eq!(first["name"], "notes-audience (copie).txt");
+        assert!(first["path"].as_str().unwrap().ends_with("notes-audience (copie).txt"));
+        assert_eq!(fs::read_to_string(dir.join("notes-audience (copie).txt")).unwrap(), "new");
+        let second = copy("newer");
+        assert_eq!(second["name"], "notes-audience (copie).txt");
+        assert_eq!(fs::read_to_string(dir.join("notes-audience (copie).txt")).unwrap(), "newer");
+        // Another origin cannot use the session, nor reach the copy.
+        assert!(matches!(
+            ureq::post(&format!("{base}/copy")).set("Origin", "https://evil.example").send_string("x"),
+            Err(ureq::Error::Status(403, _))
+        ));
+        drop(held);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "old");
+        assert_eq!(names(&dir), ["notes-audience (copie).txt", "notes-audience.txt"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_brief_hold_is_waited_out() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = scratch("brief");
+        let file = dir.join("held.txt");
+        fs::write(&file, "old").unwrap();
+        let held = OpenOptions::new().read(true).share_mode(0).open(&file).unwrap();
+        let release = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(300));
+            drop(held);
+        });
+        write_in_place(&file, &mut "new".as_bytes()).unwrap();
+        release.join().unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), "new");
+        assert_eq!(names(&dir), ["held.txt"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_lasting_hold_is_reported_and_the_file_kept() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = scratch("lasting");
+        let file = dir.join("held.txt");
+        fs::write(&file, "old").unwrap();
+        let held = OpenOptions::new().read(true).share_mode(0).open(&file).unwrap();
+        let error = write_in_place(&file, &mut "new".as_bytes()).unwrap_err();
+        assert_eq!(ondisk::Refusal::of(&error, &file), ondisk::Refusal::Locked);
+        assert!(!ondisk::holders(&file).is_empty());
+        drop(held);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "old");
+        assert_eq!(names(&dir), ["held.txt"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }

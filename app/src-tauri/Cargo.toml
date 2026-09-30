@@ -28,7 +28,7 @@ fontdb = "0.24.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_RestartManager", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 mslnk = "0.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
