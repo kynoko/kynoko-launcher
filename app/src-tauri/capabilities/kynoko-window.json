@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "kynoko-window",
-  "description": "Kynoko windows (app pages, remote): the app's bar is the window's title bar, so the page may move, minimize, maximize and close the window it is in, and give it the icon its tab would show. Only through the launcher's own_window_* commands, which act on the CALLING window and take no other: Tauri's generic window commands would let a page name another window. And the names of the computer's font families (system_fonts), for the app's font menus: names only, never a font file. Nothing else: no launcher command, no file, no setting.",
+  "description": "Kynoko windows (app pages, remote): the app's bar is the window's title bar, so the page may move, minimize, maximize and close the window it is in, give it the icon its tab would show, and say it holds unsaved work (its system close then asks the page first). Only through the launcher's own_window_* commands, which act on the CALLING window and take no other: Tauri's generic window commands would let a page name another window. And the names of the computer's font families (system_fonts), for the app's font menus: names only, never a font file. Nothing else: no launcher command, no file, no setting.",
   "windows": ["app-*"],
   "remote": {
     "urls": ["https://kynoko.com/*", "https://*.kynoko.com/*", "https://*.kynoko.com:*/*"]
@@ -13,6 +13,8 @@
     "allow-own-window-is-maximized",
     "allow-own-window-close",
     "allow-own-window-set-icon",
+    "allow-own-window-guard",
+    "allow-own-window-close-ack",
     "allow-system-fonts"
   ]
 }

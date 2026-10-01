@@ -62,6 +62,9 @@ const TITLE_BAR_GRACE: Duration = Duration::from_millis(2500);
 /// How long the window uses an app's kept icon before asking whether it
 /// changed (a conditional request: nothing is downloaded when it did not).
 const ICON_RECHECK: Duration = Duration::from_secs(3600);
+/// How long a Kynoko window's page has to answer a close request (see
+/// ask_before_closing) before the window closes anyway.
+const CLOSE_ASK_GRACE: Duration = Duration::from_secs(2);
 
 /// Added to every app address the launcher opens: the app then knows the
 /// launcher is installed for this browser, and its menu entry opens it
@@ -123,6 +126,13 @@ struct Shared {
     /// page last took over the title bar (see TITLE_BAR_GRACE).
     page_loads: Mutex<std::collections::HashMap<String, Instant>>,
     title_bar_claims: Mutex<std::collections::HashMap<String, Instant>>,
+    /// Kynoko windows whose page holds unsaved work (own_window_guard): their
+    /// system close asks the page first (see ask_before_closing).
+    guarded: Mutex<std::collections::HashSet<String>>,
+    /// When a guarded window was asked to close, until its page answers.
+    close_asked: Mutex<std::collections::HashMap<String, Instant>>,
+    /// Kynoko windows let close: by their page, or by its silence.
+    close_allowed: Mutex<std::collections::HashSet<String>>,
     /// Set at start: what the launcher's own app windows are opened with.
     handle: std::sync::OnceLock<AppHandle>,
     last_open: Mutex<Option<Instant>>,
@@ -341,9 +351,66 @@ fn own_window_is_maximized(window: tauri::WebviewWindow) -> Result<bool, String>
     window.is_maximized().map_err(|e| e.to_string())
 }
 
+/// The page closes its window: it asked its user already, if it had work to
+/// lose, so the close goes through without asking it again.
 #[tauri::command]
 fn own_window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.state::<Shared>().close_allowed.lock().expect("lock").insert(window.label().to_string());
     window.close().map_err(|e| e.to_string())
+}
+
+/// The page holds unsaved work (true) or no longer (false). While it does,
+/// the window's system close (Alt+F4, the taskbar) asks it first.
+#[tauri::command]
+fn own_window_guard(window: tauri::WebviewWindow, on: bool) {
+    let shared = window.state::<Shared>();
+    let mut guarded = shared.guarded.lock().expect("lock");
+    if on {
+        guarded.insert(window.label().to_string());
+    } else {
+        guarded.remove(window.label());
+    }
+}
+
+/// The page heard the close request and is asking its user (see ask_before_closing).
+#[tauri::command]
+fn own_window_close_ack(window: tauri::WebviewWindow) {
+    window.state::<Shared>().close_asked.lock().expect("lock").remove(window.label());
+}
+
+/// A Kynoko window whose page holds unsaved work does not close on the
+/// system's word (Alt+F4, the taskbar, its system menu): its page is told
+/// (`kynoko-close-requested`), answers at once (own_window_close_ack) and
+/// asks its user "Save / Don't save / Cancel", then closes the window itself
+/// (own_window_close) or leaves it open. A page that does not answer within
+/// CLOSE_ASK_GRACE (frozen, or an app from before the guard) does not keep
+/// its window open. True when the close was held.
+fn ask_before_closing(window: &tauri::Window, api: &tauri::CloseRequestApi) -> bool {
+    let shared = window.state::<Shared>();
+    let label = window.label().to_string();
+    if shared.close_allowed.lock().expect("lock").remove(&label) || !shared.guarded.lock().expect("lock").contains(&label) {
+        return false;
+    }
+    api.prevent_close();
+    let asked = Instant::now();
+    shared.close_asked.lock().expect("lock").insert(label.clone(), asked);
+    if let Some(page) = window.app_handle().get_webview_window(&label) {
+        let _ = page.eval("window.dispatchEvent(new Event('kynoko-close-requested'))");
+    }
+    let handle = window.app_handle().clone();
+    thread::spawn(move || {
+        thread::sleep(CLOSE_ASK_GRACE);
+        let shared = handle.state::<Shared>();
+        let unanswered = shared.close_asked.lock().expect("lock").get(&label) == Some(&asked);
+        if unanswered {
+            shared.close_asked.lock().expect("lock").remove(&label);
+            shared.close_allowed.lock().expect("lock").insert(label.clone());
+            if let Some(window) = handle.get_webview_window(&label) {
+                let _ = window.close();
+            }
+        }
+    });
+    true
 }
 
 /// The icon of the window the calling page is in: the one its tab would
@@ -374,7 +441,10 @@ fn watch_title_bar(window: tauri::WebviewWindow, event: tauri::webview::PageLoad
     let label = window.label().to_string();
     match event {
         tauri::webview::PageLoadEvent::Started => {
-            window.state::<Shared>().page_loads.lock().expect("lock").insert(label, Instant::now());
+            let shared = window.state::<Shared>();
+            // A new page holds no work until it says so (own_window_guard).
+            shared.guarded.lock().expect("lock").remove(&label);
+            shared.page_loads.lock().expect("lock").insert(label, Instant::now());
         }
         tauri::webview::PageLoadEvent::Finished => {
             thread::spawn(move || {
@@ -1188,6 +1258,9 @@ pub fn run() {
             last_app_window: Mutex::new(None),
             page_loads: Mutex::new(std::collections::HashMap::new()),
             title_bar_claims: Mutex::new(std::collections::HashMap::new()),
+            guarded: Mutex::new(std::collections::HashSet::new()),
+            close_asked: Mutex::new(std::collections::HashMap::new()),
+            close_allowed: Mutex::new(std::collections::HashSet::new()),
             handle: std::sync::OnceLock::new(),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
@@ -1208,6 +1281,8 @@ pub fn run() {
             own_window_is_maximized,
             own_window_close,
             own_window_set_icon,
+            own_window_guard,
+            own_window_close_ack,
             system_fonts,
             app_icon,
             set_shortcuts,
@@ -1259,10 +1334,16 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
-                } else {
+                } else if !ask_before_closing(window, api) {
                     *window.state::<Shared>().last_app_window.lock().expect("lock") = Some(Instant::now());
                 }
                 watch_idle(window.app_handle().clone());
+            }
+            if let tauri::WindowEvent::Destroyed = event {
+                let shared = window.state::<Shared>();
+                shared.guarded.lock().expect("lock").remove(window.label());
+                shared.close_asked.lock().expect("lock").remove(window.label());
+                shared.close_allowed.lock().expect("lock").remove(window.label());
             }
         })
         .build(tauri::generate_context!())

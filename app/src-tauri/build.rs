@@ -25,6 +25,8 @@ fn main() {
         "own_window_is_maximized",
         "own_window_close",
         "own_window_set_icon",
+        "own_window_guard",
+        "own_window_close_ack",
         "system_fonts",
     ])))
     .expect("failed to run the tauri build script")
