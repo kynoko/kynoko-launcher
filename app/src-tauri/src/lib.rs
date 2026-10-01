@@ -29,6 +29,7 @@ mod ondisk;
 mod programs;
 mod settings;
 mod shortcuts;
+mod taskbar;
 mod xdg;
 
 use std::path::PathBuf;
@@ -202,7 +203,7 @@ fn open_files(shared: &Shared, named: Option<&str>, files: &[PathBuf]) -> Result
         let key = browser.as_ref().map(|b| reach_key(b, profile.as_deref(), &origin));
         let token = bridge.open(path.clone(), origin, key);
         let url = format!("{}/open#kynokoBridge=127.0.0.1:{}/{}&{MARKER}", base.trim_end_matches('/'), bridge.port, token);
-        open_page(shared, &settings, browser, profile, &url, true)?;
+        open_page(shared, &settings, app, browser, profile, &url, true)?;
     }
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
     Ok(())
@@ -216,7 +217,7 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let settings = Settings::load();
     let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
     let (browser, profile) = browser_for(&settings, code);
-    open_page(shared, &settings, browser, profile, &url, false)
+    open_page(shared, &settings, app, browser, profile, &url, false)
 }
 
 /// The browser and profile `code` opens in: the one chosen for it, else the
@@ -253,13 +254,14 @@ fn remember_reached(key: String) {
 fn open_page(
     shared: &Shared,
     settings: &Settings,
+    app: &App,
     browser: Option<browsers::Browser>,
     profile: Option<String>,
     url: &str,
     with_file: bool,
 ) -> Result<(), String> {
     if browser.as_ref().is_some_and(|b| b.engine == browsers::Engine::Embedded) {
-        return open_embedded(shared, url);
+        return open_embedded(shared, settings, app, url);
     }
     let b = match browser {
         Some(b) if cfg!(windows) && b.engine == browsers::Engine::Gecko => b,
@@ -344,6 +346,18 @@ fn own_window_close(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// The icon of the window the calling page is in: the one its tab would
+/// show (the facade's, with the app's seal; the skeleton's
+/// KynokoFaviconService). A PNG, sent as the request's raw body, checked
+/// before use (taskbar::window_icon).
+#[tauri::command]
+fn own_window_set_icon(window: tauri::WebviewWindow, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(png) = request.body() else {
+        return Err("the icon is a PNG sent as raw bytes".into());
+    };
+    taskbar::set_icon(&window, png)
+}
+
 /// The font families of this computer, for a Kynoko window's page (an app's
 /// font menus; see fonts.rs). Names only, never a font file. Read off the
 /// window's thread, once per run.
@@ -384,15 +398,17 @@ fn watch_title_bar(window: tauri::WebviewWindow, event: tauri::webview::PageLoad
 /// An app page in the launcher's own window: an app window on every system
 /// (the system's web engine: WebView2, WKWebView, WebKitGTK), whatever
 /// browser is installed. The page is a remote site: these windows are given
-/// no capability (capabilities/default.json names "main" only), so it can
-/// never call the launcher. Its session is its own, kept in the launcher's
-/// data folder (signed in once).
-fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
+/// only what capabilities/kynoko-window.json lists (their own window, the
+/// fonts' names). Its session is its own, kept in the launcher's data folder
+/// (signed in once). The window wears its app's icon and, on Windows, its
+/// app's own taskbar button (see Dress): built hidden, dressed, then shown.
+fn open_embedded(shared: &Shared, settings: &Settings, app: &App, url: &str) -> Result<(), String> {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(1);
     let handle = shared.handle.get().ok_or("not started")?.clone();
     let target = url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
     let label = format!("app-{}", NEXT.fetch_add(1, Ordering::SeqCst));
+    let dress = Dress::of(settings, app);
     // A window without an address bar stays on Kynoko (and its payment
     // pages, whose return must land in this same session): any other
     // address goes to the system's browser.
@@ -402,6 +418,7 @@ fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
         let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
         let built = builder
             .title("Kynoko")
+            .visible(false)
             .inner_size(1280.0, 840.0)
             // No system title bar: the app's own bar is the title bar (the
             // skeleton's KynokoNativeWindowService, allowed by the capability
@@ -432,15 +449,99 @@ fn open_embedded(shared: &Shared, url: &str) -> Result<(), String> {
             })
             .build();
         match built {
-            // In front, with the focus: it was opened for the user, now.
-            Ok(window) => {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            Ok(window) => dress.put_on(window),
             Err(e) => eprintln!("kynoko-launcher: cannot open an app window: {e}"),
         }
     });
     Ok(())
+}
+
+/// What a Kynoko window wears where the system shows it: its app's icon and,
+/// on Windows, its app's taskbar identity (taskbar.rs). The page then puts
+/// its facade's icon on it (own_window_set_icon).
+struct Dress {
+    code: String,
+    /// "Kynoko Office": what a pinned button is called.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    name: String,
+    /// The app's web manifest, where its icon is read.
+    manifest: String,
+}
+
+impl Dress {
+    fn of(settings: &Settings, app: &App) -> Dress {
+        let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
+        Dress {
+            code: app.code.clone(),
+            name: app.display_name(&lang),
+            manifest: format!("{}/manifest.webmanifest", app_url(settings, app).trim_end_matches('/')),
+        }
+    }
+
+    /// The app's icon, as the settings window keeps it (see app_icon).
+    fn kept_png(&self) -> PathBuf {
+        settings::dir().join(settings::UI_ICONS).join(format!("{}.png", self.code))
+    }
+
+    /// The app's icon as an .ico, beside its PNG (a pinned button draws a
+    /// file, not an image in memory). Written when the PNG changed.
+    #[cfg(windows)]
+    fn ico(&self, png: &[u8]) -> Option<PathBuf> {
+        let path = self.kept_png().with_extension("ico");
+        let ico = shortcuts::png_to_ico(png).ok()?;
+        if std::fs::read(&path).ok().as_deref() != Some(ico.as_slice()) {
+            std::fs::write(&path, &ico).ok()?;
+        }
+        Some(path)
+    }
+
+    /// Dresses the hidden `window` and shows it, on its own thread; then, off
+    /// it, checks the app's icon again (a new icon, or a first open with none
+    /// kept yet) and puts the fresh one on.
+    fn put_on(self, window: tauri::WebviewWindow) {
+        let path = self.kept_png();
+        // The kept icon as it is: the window shows without waiting on the network.
+        let kept = std::fs::read(&path).ok().filter(|b| b.starts_with(b"\x89PNG"));
+        self.on_main_thread(&window, kept.clone(), true);
+        if let Some(fresh) = shortcuts::kept_icon(&self.manifest, &path, ICON_RECHECK) {
+            if kept.as_deref() != Some(fresh.as_slice()) {
+                self.on_main_thread(&window, Some(fresh), false);
+            }
+        }
+    }
+
+    fn on_main_thread(&self, window: &tauri::WebviewWindow, png: Option<Vec<u8>>, show: bool) {
+        #[cfg(windows)]
+        let relaunch = taskbar::Relaunch {
+            command: format!(
+                "\"{}\" launch {}",
+                std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default(),
+                self.code
+            ),
+            name: self.name.clone(),
+            icon: png.as_deref().and_then(|b| self.ico(b)),
+        };
+        #[cfg(windows)]
+        let id = taskbar::app_id(&self.code);
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            if let Some(png) = &png {
+                if let Err(e) = taskbar::set_icon(&target, png) {
+                    eprintln!("kynoko-launcher: window icon: {e}");
+                }
+            }
+            #[cfg(windows)]
+            if let Err(e) = taskbar::identify(&target, &id, &relaunch) {
+                eprintln!("kynoko-launcher: window identity: {e}");
+            }
+            if show {
+                // In front, with the focus: it was opened for the user, now.
+                let _ = target.show();
+                let _ = target.unminimize();
+                let _ = target.set_focus();
+            }
+        });
+    }
 }
 
 fn dispatch(app: &AppHandle, command: Command) {
@@ -1106,6 +1207,7 @@ pub fn run() {
             own_window_toggle_maximize,
             own_window_is_maximized,
             own_window_close,
+            own_window_set_icon,
             system_fonts,
             app_icon,
             set_shortcuts,

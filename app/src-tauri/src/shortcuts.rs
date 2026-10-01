@@ -326,7 +326,13 @@ fn link(exe: &Path, at: &Path, target: &str, icon: Option<&Path>, app: &str, inv
     if let Some(icon) = icon {
         sl.set_icon_location(Some(icon.to_string_lossy().into_owned()));
     }
-    sl.create_lnk(at).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    sl.create_lnk(at).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    // The app's taskbar identity, the one its windows wear: a pinned entry
+    // and the windows it opens make one button (taskbar.rs).
+    if let Err(e) = crate::taskbar::stamp_shortcut(at, &crate::taskbar::app_id(app)) {
+        eprintln!("kynoko-launcher: shortcut identity: {e}");
+    }
+    Ok(())
 }
 
 /// Where launcher 0.2.6 and before put an app's entries: its own folder

@@ -279,6 +279,17 @@ browser gives a clear message instead of a dead icon.
 - By default: the app shortcut is created; façade shortcuts are offered as
   checkboxes.
 - Later, not v1: façades in the Windows taskbar jump list.
+- **Taskbar identity (Windows)**: an app's windows and its Start menu
+  entries carry the app's own application identity (AppUserModelID
+  `Kynoko.App.<code>`), not the launcher's. Without it, Windows draws every
+  Kynoko window with the launcher's icon under the launcher's single button.
+  With it, each app has its button (Office's windows together, apart from
+  Photo Studio's), drawn with the app's icon; pinning it pins the app
+  (relaunch command `kynoko-launcher launch <code>`, name "Kynoko <App>",
+  the app's icon as an `.ico` in the window icons' cache), and a pinned
+  Start menu entry and the windows it opens are one button. The window gets
+  its identity before it is first shown. macOS has one Dock icon per
+  program: nothing to do there; Linux: the window's icon only.
 
 ## 7. File associations
 
@@ -484,6 +495,15 @@ in `0-template`, then adopted by Office, Photo Studio and Media Studio.
   Chromium browser, `queryLocalFonts()` answers after the browser's own
   permission prompt. Firefox and Safari have neither. The list stays in the
   page: it is never sent to a server.
+- **The window's icon** (skeleton 0.98, `KynokoFaviconService`): a Kynoko
+  window has no tab, and what the system draws for it (taskbar, Alt+Tab) is
+  the window's own icon. The launcher opens it wearing the app's icon (its
+  web manifest's) and, on Windows, the app's own taskbar identity
+  (section 6). On a facade, the page hands its window the tab's drawing (the
+  facade's icon with the app's seal) through `own_window_set_icon`, a PNG
+  sent as the request's raw body, checked (a PNG of 16 to 1024 px, 1 MB at
+  most) and put on the calling window only; leaving the facade, it hands the
+  app's icon back.
 
 ## 11. Install, uninstall, cleanup
 
@@ -637,4 +657,5 @@ catalogue in the system's language, falling back to English.
 | 2026-09-29 | Each app says, in its manifest, the browser engines it recommends and what the user misses in the others (skeleton 0.93, relayed by the platform's catalogue): the window marks "(recommended)" in the app's browser choice and shows the limitations of the browser the app opens in (its own, the default, or the system's) under the app's line. The Kynoko window counts as Chromium on Windows (WebView2), WebKit on macOS and Linux. |
 | 2026-09-30 | The computer's fonts for the apps: a Kynoko window's page may call `system_fonts` (capability "kynoko-window", Kynoko origins only), which lists the families installed on the computer (fontdb, MIT: Windows' system and per-user folders, macOS' Library folders, fontconfig on Linux; ~60 ms for 750 faces, once per run, off the window's thread). Names, weights, italic and monospace only, never a font file: the engine draws a family from its name, and nothing copies a font that is licensed to the computer. Names follow the typographic family, as CSS and `queryLocalFonts()` do (Segoe UI Semibold is Segoe UI at 600), so a document names its fonts the same way in Chrome and in a Kynoko window. An app may recommend the Kynoko window itself (`kynoko`, Office first) and mark a limitation `browsersOnly` (what the launcher gives the Kynoko window of that engine). |
 | 2026-09-30 | A refused save says why and where the work went: the bridge answers a `409` with the reason (locked, read-only, denied, failed), the programs holding the file (Windows Restart Manager) and the system's message; it waits out brief locks (about two seconds); `POST copy` writes the work beside the file (`<name> (<word>).<ext>`, the same copy on each refusal of the session) and answers its full path; `POST reveal` shows the file or the copy selected in the file manager. `ReplaceFileW` now gets a backup name, which makes each of its failures recoverable (before, a 1176 could lose the new content). |
+| 2026-10-01 | A Kynoko window wears its app, not the launcher: it opens (hidden, then shown once dressed) with the app's icon and, on Windows, the app's own AppUserModelID with relaunch command, name and icon, so that each app has its own taskbar button and pins as itself; the app's Start menu entries carry the same identity. Tauri sets a window's small icon only, and the taskbar draws the big one: the launcher sets that one too (from the PNG, which Windows reads as an icon). The page puts the facade's drawing on its own window with `own_window_set_icon` (capability "kynoko-window"; a checked PNG as the raw body), the same picture as its tab. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
