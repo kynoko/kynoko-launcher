@@ -309,7 +309,9 @@ fn cleanup(keep_preferences: bool) -> Result<(), String> {
    other: the page names nothing. Only Kynoko windows are granted them. */
 
 /// The page holds the title bar: noted, and the system's taken away if it
-/// had been given back (see TITLE_BAR_GRACE).
+/// had been given back (see TITLE_BAR_GRACE). Taken away on the window's own
+/// thread, where the give-back is decided too: whichever order the two come
+/// in, a claim is never undone by a give-back that crossed it.
 fn claim_title_bar(window: &tauri::WebviewWindow) {
     window
         .state::<Shared>()
@@ -318,8 +320,13 @@ fn claim_title_bar(window: &tauri::WebviewWindow) {
         .expect("lock")
         .insert(window.label().to_string(), Instant::now());
     #[cfg(not(target_os = "macos"))]
-    if window.is_decorated().unwrap_or(false) {
-        let _ = window.set_decorations(false);
+    {
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            if target.is_decorated().unwrap_or(false) {
+                let _ = target.set_decorations(false);
+            }
+        });
     }
 }
 
@@ -449,17 +456,24 @@ fn watch_title_bar(window: tauri::WebviewWindow, event: tauri::webview::PageLoad
         tauri::webview::PageLoadEvent::Finished => {
             thread::spawn(move || {
                 thread::sleep(TITLE_BAR_GRACE);
-                let shared = window.state::<Shared>();
-                let started = shared.page_loads.lock().expect("lock").get(&label).copied();
-                let claimed = shared.title_bar_claims.lock().expect("lock").get(&label).copied();
-                let held = match (started, claimed) {
-                    (Some(s), Some(c)) => c >= s,
-                    (None, Some(_)) => true,
-                    _ => false,
-                };
-                if !held {
-                    let _ = window.set_decorations(true);
-                }
+                // Decided and applied on the window's own thread (see
+                // claim_title_bar): checked here and applied later from
+                // another thread, a claim landing in between was overwritten,
+                // and the window kept both bars.
+                let target = window.clone();
+                let _ = window.run_on_main_thread(move || {
+                    let shared = target.state::<Shared>();
+                    let started = shared.page_loads.lock().expect("lock").get(&label).copied();
+                    let claimed = shared.title_bar_claims.lock().expect("lock").get(&label).copied();
+                    let held = match (started, claimed) {
+                        (Some(s), Some(c)) => c >= s,
+                        (None, Some(_)) => true,
+                        _ => false,
+                    };
+                    if !held {
+                        let _ = target.set_decorations(true);
+                    }
+                });
             });
         }
     }
