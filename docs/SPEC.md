@@ -490,11 +490,30 @@ in `0-template`, then adopted by Office, Photo Studio and Media Studio.
 - **The computer's fonts** (skeleton 0.94, `KynokoSystemFontsService`): a page
   cannot list them by itself (the list tells computers apart). In a Kynoko
   window, the launcher's `system_fonts` command answers, on every system:
-  family names with their weights, italic and monospace, never a font file
-  (a font is licensed to the computer; the engine finds it by its name). In a
-  Chromium browser, `queryLocalFonts()` answers after the browser's own
-  permission prompt. Firefox and Safari have neither. The list stays in the
-  page: it is never sent to a server.
+  family names with their weights, italic and monospace, which is all a font
+  menu needs (the engine finds a family by its name). In a Chromium browser,
+  `queryLocalFonts()` answers after the browser's own permission prompt.
+  Firefox and Safari have neither. The list stays in the page: it is never
+  sent to a server.
+
+  An app that draws text itself (a layout app shapes its lines with HarfBuzz
+  and embeds the glyphs it used in the PDF it exports) needs a font's file,
+  not its name. In a Kynoko window, `system_font_face` (`name`, `weight`,
+  `italic`) picks the installed face CSS would draw for that family (a name
+  `system_fonts` gives, compared without case), among the faces that are
+  files on disk: the normal width first, then the style asked, then the
+  nearest weight the CSS way. It answers `{ id, index }`, or `null` when there
+  is no such face: `id` stands for the face during this run of the launcher,
+  `index` is the face's index in its file (non-zero in a `.ttc` collection).
+  `system_font_file` (`id`) answers the bytes of that face's file, as the
+  response's raw body (an `ArrayBuffer`), read off the window's thread,
+  128 MiB at most (CJK collections weigh tens of MB). Never a path, never
+  another file: the page can only name a face the launcher found among the
+  computer's fonts, and a file that is no longer a font is refused. The font
+  stays licensed to the computer: the app may draw with it and embed it in a
+  document it exports, and honouring the font's embedding permissions
+  (OS/2 `fsType`) when it does is the app's responsibility, which the
+  launcher cannot check.
 - **The window's icon** (skeleton 0.98, `KynokoFaviconService`): a Kynoko
   window has no tab, and what the system draws for it (taskbar, Alt+Tab) is
   the window's own icon. The launcher opens it wearing the app's icon (its
@@ -670,4 +689,5 @@ catalogue in the system's language, falling back to English.
 | 2026-10-01 | A Kynoko window wears its app, not the launcher: it opens (hidden, then shown once dressed) with the app's icon and, on Windows, the app's own AppUserModelID with relaunch command, name and icon, so that each app has its own taskbar button and pins as itself; the app's Start menu entries carry the same identity. Tauri sets a window's small icon only, and the taskbar draws the big one: the launcher sets that one too (from the PNG, which Windows reads as an icon). The page puts the facade's drawing on its own window with `own_window_set_icon` (capability "kynoko-window"; a checked PNG as the raw body), the same picture as its tab. |
 | 2026-10-01 | Closing a Kynoko window no longer loses unsaved work: a page holding some says so (`own_window_guard`), and the window's system close (Alt+F4, the taskbar) is then held while the page asks its user "Save / Don't save / Cancel" (event `kynoko-close-requested`, answered at once with `own_window_close_ack`; the page closes its window itself). The page's answer is awaited 2 s at most: a frozen page, or an app from before the guard, never keeps its window open. A page that loads anew starts unguarded. |
 | 2026-10-03 | The title bar's hand-back no longer crosses a page's claim: the system's bar given back to a page that did not take the app's (TITLE_BAR_GRACE after its load) is decided and applied on the window's own thread, and a claim takes the bar away on that thread too, so that whichever comes first, a claim always wins. Checked on a helper thread and applied later, a claim landing in between was overwritten, and the window wore both bars. The skeleton (0.99.1) also claims again after the page's load and whenever the window comes to the front, and keeps asking while the launcher does not answer, which a launcher from before this fix needs. |
+| 2026-10-04 | A Kynoko page may read the FILE of an installed font, not only its name: an app that draws text itself (shaping with HarfBuzz, embedding the glyphs it used in the PDF it exports) cannot do it with a name. `system_font_face` (family, weight, italic) picks the installed face the way CSS does (normal width, then the style, then the nearest weight), among the faces that are files on disk, and answers a number that stands for it during this run and its index in its file (`.ttc` collections); `system_font_file` reads that face's file with the number (raw bytes, 128 MiB at most, off the window's thread, refused if no longer a font). Both share the one scan of `system_fonts`, and are granted in the "kynoko-window" capability only (Kynoko origins, app windows). Never a path, never another file. The font stays licensed to the computer: honouring its embedding permissions (OS/2 fsType) when exporting is the app's responsibility. This replaces the "never a font file" of 2026-09-30 with "never a path, never another file". |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

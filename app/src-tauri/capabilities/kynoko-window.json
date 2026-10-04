@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "kynoko-window",
-  "description": "Kynoko windows (app pages, remote): the app's bar is the window's title bar, so the page may move, minimize, maximize and close the window it is in, give it the icon its tab would show, and say it holds unsaved work (its system close then asks the page first). Only through the launcher's own_window_* commands, which act on the CALLING window and take no other: Tauri's generic window commands would let a page name another window. And the names of the computer's font families (system_fonts), for the app's font menus: names only, never a font file. Nothing else: no launcher command, no file, no setting.",
+  "description": "Kynoko windows (app pages, remote): the app's bar is the window's title bar, so the page may move, minimize, maximize and close the window it is in, give it the icon its tab would show, and say it holds unsaved work (its system close then asks the page first). Only through the launcher's own_window_* commands, which act on the CALLING window and take no other: Tauri's generic window commands would let a page name another window. And the computer's fonts: the names of its font families (system_fonts), for the app's font menus, and the file of one installed face, for an app that draws text itself and embeds it in a document it exports (system_font_face names a face by family, weight and style and answers a number valid for this run; system_font_file reads that face's file with it). Never a path, never another file: the page can only name a face the launcher found among the computer's fonts. The font stays licensed to the computer: honouring its embedding permissions (OS/2 fsType) when exporting is the app's responsibility. Nothing else: no other launcher command, no other file, no setting.",
   "windows": ["app-*"],
   "remote": {
     "urls": ["https://kynoko.com/*", "https://*.kynoko.com/*", "https://*.kynoko.com:*/*"]
@@ -15,6 +15,8 @@
     "allow-own-window-set-icon",
     "allow-own-window-guard",
     "allow-own-window-close-ack",
-    "allow-system-fonts"
+    "allow-system-fonts",
+    "allow-system-font-face",
+    "allow-system-font-file"
   ]
 }

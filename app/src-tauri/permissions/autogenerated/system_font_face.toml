@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-system-font-face"
+description = "Enables the system_font_face command without any pre-configured scope."
+commands.allow = ["system_font_face"]
+
+[[permission]]
+identifier = "deny-system-font-face"
+description = "Denies the system_font_face command without any pre-configured scope."
+commands.deny = ["system_font_face"]

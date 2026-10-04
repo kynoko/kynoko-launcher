@@ -432,14 +432,49 @@ fn own_window_set_icon(window: tauri::WebviewWindow, request: tauri::ipc::Reques
     taskbar::set_icon(&window, png)
 }
 
-/// The font families of this computer, for a Kynoko window's page (an app's
-/// font menus; see fonts.rs). Names only, never a font file. Read off the
-/// window's thread, once per run.
+// The computer's fonts, for a Kynoko window's page (capability
+// "kynoko-window"; the policy is in fonts.rs). The page may know the names
+// of the font families, and read the file of an installed face to draw text
+// itself and embed it in a document it exports: never a path, never another
+// file. The font stays licensed to the computer, and honouring its embedding
+// permissions (OS/2 fsType) when exporting is the app's responsibility. The
+// three commands share one read of the fonts, made once per run, off the
+// window's thread.
+
+/// The font families of this computer, for an app's font menus: names,
+/// weights, italic, monospace.
 #[tauri::command]
 async fn system_fonts() -> Result<Vec<fonts::Family>, String> {
     tauri::async_runtime::spawn_blocking(|| fonts::families().to_vec())
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The installed face CSS would draw for a family (a name system_fonts
+/// gives, compared without case), a weight and a style, among the faces that
+/// are files on disk (fonts::choose): `{ id, index }`, the number that stands
+/// for the face during this run and its index in its file (non-zero in a
+/// .ttc collection). None when the computer has no such face. The page reads
+/// the face's file with system_font_file; it never sees a path.
+#[tauri::command]
+async fn system_font_face(name: String, weight: u16, italic: bool) -> Result<Option<fonts::FontFace>, String> {
+    tauri::async_runtime::spawn_blocking(move || fonts::face(&name, weight, italic))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The bytes of the font file of a face system_font_face answered, as the
+/// response's raw body (an ArrayBuffer in the page), for an app that draws
+/// text itself and embeds the glyphs it used in a document it exports. Only
+/// for a number system_font_face gives: the page can name neither a path nor
+/// any file but an installed font, and a file past fonts::MAX_FONT_FILE or no
+/// longer a font is refused.
+#[tauri::command]
+async fn system_font_file(id: u32) -> Result<tauri::ipc::Response, String> {
+    let bytes = tauri::async_runtime::spawn_blocking(move || fonts::file(id))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// Page loads of a Kynoko window: a page that has not taken the title bar
@@ -1298,6 +1333,8 @@ pub fn run() {
             own_window_guard,
             own_window_close_ack,
             system_fonts,
+            system_font_face,
+            system_font_file,
             app_icon,
             set_shortcuts,
             check_catalogue,

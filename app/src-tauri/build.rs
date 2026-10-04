@@ -1,8 +1,9 @@
 fn main() {
     // Every command is listed, so that each gets its own permission: the
     // settings window is granted the launcher's commands (capability
-    // "default"), a Kynoko window's page only the own_window_* ones and
-    // system_fonts (capability "kynoko-window").
+    // "default"), a Kynoko window's page only the own_window_* ones and the
+    // computer's fonts, system_fonts, system_font_face and system_font_file
+    // (capability "kynoko-window").
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
         "get_state",
         "set_default_browser",
@@ -28,6 +29,8 @@ fn main() {
         "own_window_guard",
         "own_window_close_ack",
         "system_fonts",
+        "system_font_face",
+        "system_font_file",
     ])))
     .expect("failed to run the tauri build script")
 }
