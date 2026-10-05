@@ -17,6 +17,7 @@ mod assoc;
 mod bridge;
 mod browsers;
 mod catalogue;
+mod dialog;
 mod fonts;
 mod handoff;
 mod launch;
@@ -152,7 +153,8 @@ impl Shared {
     fn bridge(&self) -> Result<Bridge, String> {
         let mut slot = self.bridge.lock().expect("bridge lock");
         if slot.is_none() {
-            *slot = Some(Bridge::start(remember_reached).map_err(|e| e.to_string())?);
+            let bridge = Bridge::start(remember_reached, std::sync::Arc::new(dialog::save_file));
+            *slot = Some(bridge.map_err(|e| e.to_string())?);
         }
         Ok(slot.clone().expect("started"))
     }

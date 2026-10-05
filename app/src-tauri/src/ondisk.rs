@@ -53,8 +53,24 @@ impl Refusal {
 
 /// Another program's open handle, as Windows reports it: a sharing or lock
 /// violation, or ReplaceFileW unable to move the files around (1175-1177).
+/// macOS and Linux: a lock another program took on it (held_lock).
 pub fn is_lock(error: &io::Error) -> bool {
-    cfg!(windows) && matches!(error.raw_os_error(), Some(32 | 33 | 1175 | 1176 | 1177))
+    if cfg!(windows) {
+        matches!(error.raw_os_error(), Some(32 | 33 | 1175 | 1176 | 1177))
+    } else {
+        error.kind() == io::ErrorKind::WouldBlock
+    }
+}
+
+/// The error for a file another program holds a lock on (a lock the bridge
+/// could not take), as is_lock recognises it: Windows' lock violation, else
+/// "would block".
+pub fn held_lock() -> io::Error {
+    if cfg!(windows) {
+        io::Error::from_raw_os_error(33)
+    } else {
+        io::Error::from(io::ErrorKind::WouldBlock)
+    }
 }
 
 /// The programs that have `path` open, by the names the system gives them,

@@ -358,7 +358,8 @@ Validated in phase 0 with Edge 154 and Firefox 156 (`spikes/loopback-bridge`).
 ### Session
 
 - Created by Kynoko Launcher only, from the operating system (association,
-  "Open" in its window). **A web page can never name a path.**
+  "Open" in its window), or from the user's choice in the system's "Save as"
+  dialog (`save-as`). **A web page can never name a path.**
 - Token: 256 random bits, compared in constant time, naming exactly one file.
 - Passed to the page in the URL **fragment** (never sent to a server, never in
   a `Referer`): `#kynokoBridge=127.0.0.1:<port>/<token>`. The page removes it
@@ -373,10 +374,12 @@ Validated in phase 0 with Edge 154 and Firefox 156 (`spikes/loopback-bridge`).
 
 | Method | Path | Result |
 |---|---|---|
-| `OPTIONS` | any | `204`, CORS preflight (methods `GET, PUT, POST, DELETE`; headers `If-Match, Content-Type`); `Access-Control-Allow-Private-Network: true` when asked |
-| `GET` | `/s/<token>/meta` | `200` `{ name, size, etag }`; `410` if the file is gone |
-| `GET` | `/s/<token>/content` | `200` streamed bytes, `ETag` exposed |
+| `OPTIONS` | any | `204`, CORS preflight (methods `GET, PUT, POST, DELETE`; headers `If-Match, Content-Type, Range`); `Access-Control-Allow-Private-Network: true` when asked |
+| `GET` | `/s/<token>/meta` | `200` `{ name, size, etag, features }`; `410` if the file is gone. `features` lists what the launcher offers besides whole reads and writes: `range`, `append`, `save-as` (absent before 0.2.23, which offers none of them) |
+| `GET` | `/s/<token>/content` | `200` streamed bytes, with `ETag`, `Content-Length` and `Accept-Ranges: bytes`. With one `Range: bytes=a-b`, `bytes=a-` or `bytes=-n` (the last n bytes): `206` with that slice only, streamed from disk, and `Content-Range: bytes a-b/<size>`; `416` with `Content-Range: bytes */<size>` when it holds nothing of the file (a start at or past its end, `bytes=-0`, an empty file). Several ranges, another unit or a malformed range: `200`, the whole file. Every answer carries the file's `ETag`: a page reading a file in parts compares it with the one it started from (no `If-Range`). Launchers before 0.2.23 ignore `Range` and answer `200` whole: a page checks for `206` (or `features`) before relying on it |
 | `PUT` | `/s/<token>/content` | Requires `If-Match: <etag>`. `200` `{ etag }`; `412` + current `ETag` if the file changed on disk; `409` `{ reason, holders, detail }` if it cannot be written: `reason` is `locked` (another program holds it; `holders` names the programs, from the Windows Restart Manager), `readonly`, `denied` (permissions, a protected folder) or `failed`; `detail` is the system's message. Launchers before 0.2.18 answered a plain-text `409` for all of these |
+| `POST` | `/s/<token>/append` | The body added at the END of the file, in place (see *Writing*). Requires `If-Match: <etag>`. `200` `{ etag, size }` (the new tag and length, `ETag` too); `412` + current `ETag` if the file changed on disk; `409` as for `PUT`. Launchers before 0.2.23 answer `405` |
+| `POST` | `/s/<token>/save-as?name=<file name>` | "Save as": the system's own save dialog, in front, opened on the session file's folder, offering its type, suggesting `name` (kept to a plain file name, given the file's extension; the file's own name when absent). The body is written where the user picked (see *Writing*), and a NEW session is opened on that file for the same origin. `200` `{ token, name, etag }` (the new session's token, the file's name, never its path); `200` `{ cancelled: true }` when the user cancels; `409` as for `PUT` if the chosen file cannot be written. One dialog at a time: a second request waits for the first dialog to close. Launchers before 0.2.23 answer `405` |
 | `POST` | `/s/<token>/copy?suffix=<word>` | The body written BESIDE the file, as `<stem> (<word>)<ext>` (`word`: the page's own for "copy", kept to letters, digits and spaces), and to that same copy again on the next call of the session. `200` `{ name, path }` (the full path, for the page to say where the work went); `409` as for `PUT`. Launchers before 0.2.18 answer `405` |
 | `POST` | `/s/<token>/reveal?which=file\|copy` | The file or its copy shown selected in the system's file manager (Explorer `/select`, Finder `open -R`, freedesktop `FileManager1.ShowItems` else the folder). `204`; `404` when there is no copy. Only these two paths: a session names no other |
 | `POST` | `/s/<token>/heartbeat` | `204` |
@@ -384,7 +387,8 @@ Validated in phase 0 with Edge 154 and Firefox 156 (`spikes/loopback-bridge`).
 | other | | `404` (unknown token) / `405` |
 
 Every response carries `Access-Control-Allow-Origin: <origin>`,
-`Access-Control-Expose-Headers: ETag`, `Vary: Origin`, `Cache-Control: no-store`.
+`Access-Control-Expose-Headers: ETag, Content-Range, Accept-Ranges, Content-Length`,
+`Vary: Origin`, `Cache-Control: no-store`.
 
 ### Writing
 
@@ -411,6 +415,59 @@ Every response carries `Access-Control-Allow-Origin: <origin>`,
   for about two seconds (100, 200, 400, 600, 800 ms) before the write is
   refused: an antivirus or the indexer reading the file just written, a sync
   client, Explorer's preview pane hold a file only briefly.
+- A refused write reads the rest of the request's body before answering
+  (tiny_http would read it after, into one buffer the size of what is left:
+  gigabytes, for a large file).
+
+### Large files: reading in parts, appending
+
+A project file is a container (ZIP) that may weigh gigabytes (a video project
+embeds its media). Reading it whole into the page and writing it whole at
+every save does not scale. The container is designed for two things, which
+the bridge serves:
+
+- **Reading its parts**: `GET content` with a `Range`, one slice per request,
+  streamed from disk.
+- **Saving by appending**: the changed entries, then a new central directory,
+  written at the END of the file (`POST append`). Nothing already on disk is
+  read or written again: appending 1 MiB to a 1 GiB file takes 6 ms where a
+  whole `PUT` takes 4.3 s (Windows 11, local SSD).
+
+An append is written **in place**, the one write that is: a temporary file
+and a swap would write the gigabytes again. So:
+
+- the file is opened for writing and **locked exclusively** first (Windows:
+  no other writer while it is open, and the lock keeps other programs' reads
+  out of it for the append's duration; macOS and Linux: an advisory `flock`).
+  A lock held by another program is waited for as above, then refused with
+  `409` `locked`;
+- `If-Match` is checked again once the lock is held, so nothing slips in
+  between the check and the write;
+- the new bytes are synced (`fsync`, `FlushFileBuffers`) before the answer;
+- a failure while writing (a full disk, a page gone mid-request) cuts the
+  file back to its length and date, so the page's tag still names it;
+- **a crash or a power cut can leave the old content whole followed by a
+  torn tail.** This is accepted by design: the container's reader finds the
+  last complete central directory and ignores what follows it, so the file
+  opens as it was at the last complete save. The bridge always appends at
+  the end of what is on disk; a whole write (`PUT`, "Save as") rewrites the
+  file without the torn tail.
+
+### Save as
+
+`POST save-as` lets a page offer "Save as" without ever naming a path: the
+launcher shows the system's own save dialog (Windows' common item dialog,
+macOS' `NSSavePanel`, the XDG desktop portal on Linux, `zenity` where there is
+no portal), which asks before replacing a file. The dialog opens in front of
+the page: on Windows a background program cannot take the focus by itself,
+so the dialog is owned by an empty, always-on-top window of the launcher,
+put in front first (its thread shares for a moment the input of the window
+in front), and the focus goes back to that window afterwards; macOS raises
+the panel above every window. The body is then written the safe way, as for
+`PUT` (a new file: written aside and renamed into place), and the page gets
+a new session on the new file, for its own origin only. The dialog is
+labelled by the system, in its language; the type it offers is named by its
+extension (`.<ext>`), so there is no word to translate.
 
 ### Measured (phase 0, Windows 11)
 
@@ -470,7 +527,7 @@ in `0-template`, then adopted by Office, Photo Studio and Media Studio.
 
   | Source | Where | Save |
   |---|---|---|
-  | `bridge` | Kynoko Launcher, any desktop browser | `PUT` with `If-Match`, in place |
+  | `bridge` | Kynoko Launcher, any desktop browser | `PUT` with `If-Match`, in place; a large container appends its changes (`append`) and reads its parts (`Range`); "Save as" through the system's dialog (`save-as`) |
   | `handle` | "Open" button with `showOpenFilePicker` (Chromium), ChromeOS `file_handlers` | `createWritable()`, in place |
   | `share` | Android `share_target` (service worker) | copy: save = download / share |
   | `picker` | `<input type=file>` everywhere else (Firefox/Safari without Kynoko Launcher, iOS) | copy: save = download |
@@ -690,4 +747,5 @@ catalogue in the system's language, falling back to English.
 | 2026-10-01 | Closing a Kynoko window no longer loses unsaved work: a page holding some says so (`own_window_guard`), and the window's system close (Alt+F4, the taskbar) is then held while the page asks its user "Save / Don't save / Cancel" (event `kynoko-close-requested`, answered at once with `own_window_close_ack`; the page closes its window itself). The page's answer is awaited 2 s at most: a frozen page, or an app from before the guard, never keeps its window open. A page that loads anew starts unguarded. |
 | 2026-10-03 | The title bar's hand-back no longer crosses a page's claim: the system's bar given back to a page that did not take the app's (TITLE_BAR_GRACE after its load) is decided and applied on the window's own thread, and a claim takes the bar away on that thread too, so that whichever comes first, a claim always wins. Checked on a helper thread and applied later, a claim landing in between was overwritten, and the window wore both bars. The skeleton (0.99.1) also claims again after the page's load and whenever the window comes to the front, and keeps asking while the launcher does not answer, which a launcher from before this fix needs. |
 | 2026-10-04 | A Kynoko page may read the FILE of an installed font, not only its name: an app that draws text itself (shaping with HarfBuzz, embedding the glyphs it used in the PDF it exports) cannot do it with a name. `system_font_face` (family, weight, italic) picks the installed face the way CSS does (normal width, then the style, then the nearest weight), among the faces that are files on disk, and answers a number that stands for it during this run and its index in its file (`.ttc` collections); `system_font_file` reads that face's file with the number (raw bytes, 128 MiB at most, off the window's thread, refused if no longer a font). Both share the one scan of `system_fonts`, and are granted in the "kynoko-window" capability only (Kynoko origins, app windows). Never a path, never another file. The font stays licensed to the computer: honouring its embedding permissions (OS/2 fsType) when exporting is the app's responsibility. This replaces the "never a font file" of 2026-09-30 with "never a path, never another file". |
+| 2026-10-05 | Large files through the bridge, for the apps' project files (ZIP containers of several GB: a video project embeds its media). `GET content` honours one `Range` (`206`, `416`, `Accept-Ranges`, the slice streamed from disk) and always sends `Content-Length`. `POST append` adds the body at the end of the file IN PLACE, under an exclusive lock, `If-Match` checked again under it, synced before the answer, cut back on a failed write; a crash may leave a torn tail after the old content, which the container's reader skips (it reads the last complete central directory): accepted, since a temporary copy and a swap would write the gigabytes again at every save. `POST save-as` shows the system's save dialog (rfd, MIT: common item dialog, `NSSavePanel`, XDG portal), brought in front of the browser (Windows: an always-on-top owner window put in front first), writes the body where the user picked, the safe way, and answers a new session for the same origin: the page suggests a name, never a path. `meta` lists these `features`. A refused write reads the rest of its body before answering. Older pages are unchanged. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

@@ -6,7 +6,9 @@ Windows, macOS and Linux.
 - Installs the Kynoko apps, with shortcuts to each app and its tools.
 - Opens your files in the right app with a double-click, in the browser you
   choose (any installed browser, per app if you like).
-- Lets the app save back to the original file.
+- Lets the app save back to the original file (a large project by adding
+  only what changed to its end), or under a new name you pick in your
+  system's own "Save as" dialog.
 - Removes everything it created when you uninstall it, and restores your
   previous default apps.
 
