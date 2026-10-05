@@ -172,6 +172,102 @@ pub fn png_to_ico(png: &[u8]) -> Result<Vec<u8>, String> {
     Ok(ico)
 }
 
+/// Where the mark on Kynoko's files comes from: the platform's own web
+/// manifest, whose icon is the Kynoko tile (the mushroom). A brand picture,
+/// fetched at run time like the apps' icons, never kept in this repository.
+const MARK_MANIFEST: &str = "https://kynoko.com/manifest.webmanifest";
+/// How long the kept mark serves before it is checked again.
+const MARK_RECHECK: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
+
+/// The Kynoko mark, kept beside the icons; None when it was never had (offline).
+fn mark(inventory: &mut Inventory) -> Option<Vec<u8>> {
+    let path = icons_dir().join("kynoko-mark.png");
+    for kept in [path.clone(), path.with_extension("json")] {
+        inventory.record(Artefact::File { path: kept.to_string_lossy().into_owned() }).ok()?;
+    }
+    kept_icon(MARK_MANIFEST, &path, MARK_RECHECK)
+}
+
+/// Boréal's facet, kynoko-ui's corners (its 16px 4px radius tokens and their
+/// kin), on a square of side `side`: the top-left and bottom-right corners
+/// ample, a quarter of the side, the other two sharp, 6 % - as measured on
+/// the Kynoko tile itself (128 and 30 px of 512).
+fn in_facet(x: f32, y: f32, side: f32) -> bool {
+    if x < 0.0 || y < 0.0 || x > side || y > side {
+        return false;
+    }
+    let (left, top) = (x < side / 2.0, y < side / 2.0);
+    let r = if left == top { side * 0.25 } else { side * 0.06 };
+    let (cx, cy) = (if left { r } else { side - r }, if top { r } else { side - r });
+    let in_corner = (if left { x < cx } else { x > cx }) && (if top { y < cy } else { y > cy });
+    !in_corner || (x - cx).powi(2) + (y - cy).powi(2) <= r * r
+}
+
+/// How much of pixel (px, py) the facet of side `side` placed at (x0, y0)
+/// covers, from 0 to 1 (4 × 4 samples: smooth edges at every size).
+fn facet_cover(px: u32, py: u32, x0: f32, y0: f32, side: f32) -> f32 {
+    let mut inside = 0;
+    for sy in 0..4 {
+        for sx in 0..4 {
+            let x = px as f32 + (sx as f32 + 0.5) / 4.0 - x0;
+            let y = py as f32 + (sy as f32 + 0.5) / 4.0 - y0;
+            if in_facet(x, y, side) {
+                inside += 1;
+            }
+        }
+    }
+    inside as f32 / 16.0
+}
+
+/// The icon a Kynoko app's files wear (a 256 px PNG): its facade's icon cut
+/// to the facet, and the Kynoko mark in the corner the facet frees, bottom
+/// right, parted from the icon by a transparent ring so that it reads in a
+/// light folder and a dark one alike. Without the mark, the facet alone.
+pub(crate) fn file_icon(icon: &[u8], mark: Option<&[u8]>) -> Result<Vec<u8>, String> {
+    use image::ImageEncoder;
+    const SIDE: u32 = 256;
+    const MARK: u32 = SIDE * 9 / 25; // 36 % of the side: a small mark, the app's drawing first
+    let load = |png: &[u8], size: u32| -> Result<image::RgbaImage, String> {
+        Ok(image::load_from_memory_with_format(png, image::ImageFormat::Png)
+            .map_err(|e| e.to_string())?
+            .resize_exact(size, size, image::imageops::FilterType::Lanczos3)
+            .to_rgba8())
+    };
+    let (side, mark_side, gap) = (SIDE as f32, MARK as f32, SIDE as f32 * 0.035);
+    let corner = side - mark_side;
+    let mut out = load(icon, SIDE)?;
+    let mark = mark.and_then(|m| load(m, MARK).ok());
+    for (x, y, pixel) in out.enumerate_pixels_mut() {
+        let mut kept = facet_cover(x, y, 0.0, 0.0, side);
+        if mark.is_some() {
+            kept *= 1.0 - facet_cover(x, y, corner - gap, corner - gap, mark_side + 2.0 * gap);
+        }
+        pixel[3] = (pixel[3] as f32 * kept).round() as u8;
+    }
+    if let Some(mark) = mark {
+        for (x, y, m) in mark.enumerate_pixels() {
+            let a = facet_cover(x, y, 0.0, 0.0, mark_side) * m[3] as f32 / 255.0;
+            if a <= 0.0 {
+                continue;
+            }
+            // Over what is left beneath (nothing, the ring cleared it).
+            let pixel = out.get_pixel_mut(SIDE - MARK + x, SIDE - MARK + y);
+            let below = pixel[3] as f32 / 255.0;
+            let total = a + below * (1.0 - a);
+            for c in 0..3 {
+                let v = (m[c] as f32 * a + pixel[c] as f32 * below * (1.0 - a)) / total;
+                pixel[c] = v.round().clamp(0.0, 255.0) as u8;
+            }
+            pixel[3] = (total * 255.0).round() as u8;
+        }
+    }
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut png)
+        .write_image(out.as_raw(), SIDE, SIDE, image::ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
+    Ok(png)
+}
+
 /// Downloads an icon into `name`.ico; None when it cannot be had (the
 /// shortcut then wears the launcher's own icon).
 fn icon_file(manifest_url: &str, name: &str, inventory: &mut Inventory) -> Option<PathBuf> {
@@ -196,8 +292,8 @@ fn type_icon_path(app: &App, facade: &Facade, format: &str) -> PathBuf {
     icons_dir().join(format!("assoc-{}-{}.{format}", app.code, facade.slug()))
 }
 
-/// The icon (`ico` or `png`) of the files `facade` opens; None when it
-/// cannot be had, and the type then wears the launcher's own.
+/// The icon (`ico` or `png`) of the files `facade` opens (see file_icon);
+/// None when it cannot be had, and the type then wears the launcher's own.
 #[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 pub(crate) fn type_icon(app: &App, facade: &Facade, settings: &Settings, format: &str, inventory: &mut Inventory) -> Option<PathBuf> {
     let path = type_icon_path(app, facade, format);
@@ -205,7 +301,9 @@ pub(crate) fn type_icon(app: &App, facade: &Facade, settings: &Settings, format:
     if path.is_file() && inventory.artefacts.contains(&recorded) {
         return Some(path);
     }
-    let png = fetch_icon(&facade_manifest(&settings.url_of(app), facade)).ok()?;
+    let icon = fetch_icon(&facade_manifest(&settings.url_of(app), facade)).ok()?;
+    let mark = mark(inventory);
+    let png = file_icon(&icon, mark.as_deref()).unwrap_or(icon);
     let bytes = if format == "ico" { png_to_ico(&png).ok()? } else { png };
     inventory.record(recorded).ok()?;
     std::fs::create_dir_all(icons_dir()).ok()?;
@@ -523,6 +621,73 @@ mod tests {
         // Offline: kept.
         assert_eq!(kept_icon("http://127.0.0.1:9/manifest.webmanifest", &path, Duration::ZERO).unwrap(), b"\x89PNG second");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn solid(size: u32, rgba: [u8; 4]) -> Vec<u8> {
+        use image::ImageEncoder;
+        let img = image::RgbaImage::from_pixel(size, size, image::Rgba(rgba));
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(img.as_raw(), size, size, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        png
+    }
+
+    #[test]
+    fn file_icons_wear_the_facet_and_the_mark() {
+        let blue = [40, 110, 230, 255];
+        let violet = [90, 40, 160, 255];
+        let read = |png: &[u8]| image::load_from_memory(png).unwrap().to_rgba8();
+        let near = |p: &image::Rgba<u8>, rgba: [u8; 4]| p.0.iter().zip(rgba).all(|(a, b)| a.abs_diff(b) <= 2);
+        let alone = read(&file_icon(&solid(512, blue), None).unwrap());
+        assert_eq!(alone.dimensions(), (256, 256));
+        // The facet: top-left and bottom-right ample (64 px), the other two sharp (15 px).
+        assert_eq!(alone.get_pixel(6, 6)[3], 0);
+        assert_eq!(alone.get_pixel(250, 250)[3], 0);
+        assert!(near(alone.get_pixel(30, 30), blue), "an ample corner's arc passes beyond (30, 30)");
+        assert_eq!(alone.get_pixel(254, 1)[3], 0);
+        assert_eq!(alone.get_pixel(1, 254)[3], 0);
+        assert!(near(alone.get_pixel(250, 10), blue), "a sharp corner is small");
+        assert!(near(alone.get_pixel(240, 16), blue));
+        assert!(near(alone.get_pixel(128, 1), blue));
+        assert!(near(alone.get_pixel(128, 128), blue));
+
+        let marked = read(&file_icon(&solid(512, blue), Some(&solid(64, violet))).unwrap());
+        // The mark in the bottom-right corner (92 px from 164), the icon elsewhere...
+        assert!(near(marked.get_pixel(220, 220), violet));
+        assert!(near(marked.get_pixel(100, 100), blue));
+        // ...parted by a transparent ring (9 px), left of and above the mark.
+        assert_eq!(marked.get_pixel(160, 215)[3], 0);
+        assert_eq!(marked.get_pixel(215, 160)[3], 0);
+        assert!(near(marked.get_pixel(150, 215), blue));
+    }
+
+    /// A look at a real one: KYNOKO_FILE_ICON_SAMPLE="<icon.png>;<mark.png>;<out.png>".
+    #[test]
+    #[ignore]
+    fn file_icon_sample() {
+        let spec = std::env::var("KYNOKO_FILE_ICON_SAMPLE").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let mark = std::fs::read(parts[1]).ok();
+        let png = file_icon(&std::fs::read(parts[0]).unwrap(), mark.as_deref()).unwrap();
+        std::fs::write(parts[2], &png).unwrap();
+        // And as a folder shows it: 96, 48, 32 and 16 px, on light and on dark.
+        let icon = image::load_from_memory(&png).unwrap();
+        let mut sheet = image::RgbaImage::new(250, 220);
+        for (row, bg) in [[243u8, 243, 243, 255], [32, 32, 32, 255]].iter().enumerate() {
+            for y in 0..110 {
+                for x in 0..250 {
+                    sheet.put_pixel(x, row as u32 * 110 + y, image::Rgba(*bg));
+                }
+            }
+            let mut x = 5;
+            for size in [96u32, 48, 32, 16] {
+                let small = icon.resize_exact(size, size, image::imageops::FilterType::Lanczos3).to_rgba8();
+                image::imageops::overlay(&mut sheet, &small, x, row as i64 * 110 + 7);
+                x += size as i64 + 12;
+            }
+        }
+        sheet.save(parts[2].replace(".png", "-sheet.png")).unwrap();
     }
 
     #[test]
