@@ -656,12 +656,45 @@ Trust instead of signatures: public source, SHA-256 checksums published with
 every release, builds from GitHub Actions visible to all, and reproducible
 builds as a goal.
 
-## 13. Self-update notice
+## 13. Self-update notice, and "Download and install"
 
-No auto-update (Tauri's updater requires its own signing key; to revisit).
-Kynoko Launcher checks the latest GitHub release with the same policy as
-the catalogue (12 h, conditional, jitter) and shows a line in its window when a
-newer version exists. No system notification.
+No automatic update (Tauri's updater requires its own signing key; to
+revisit). "Check now" asks GitHub for the latest release and, when it is newer,
+the window shows it in a card: the version, the one installed, and two
+buttons. No system notification.
+
+- **Download** (with "from GitHub" in small): the release's page, in the
+  system's browser.
+- **Download and install**, when the release has this system's file:
+  - the file is fetched by the launcher, from this repository's releases only
+    (`https://github.com/kynoko/kynoko-launcher/releases/download/`), at most
+    512 MB, into the user's cache folder (never a roaming profile), and must
+    match the SHA-256 GitHub computed when it was uploaded (the API's
+    `digest`; the release's `SHA256SUMS.txt` when the API gives none). The
+    window only asks for "the latest": no address or path comes from a page,
+    and the commands are granted to the settings window alone (capability
+    "default"), never to a Kynoko window;
+  - **Windows** and the **AppImage** install in place. The launcher closes
+    its Kynoko windows first, each through the unsaved-work guard (the page
+    asks "Save / Don't save / Cancel"); a window kept open is waited for, up
+    to 10 minutes, and the window offers Cancel. When files are open through
+    the bridge in a browser, or Kynoko windows are open, the window says first
+    what installing closes. Once none is left, it waits for the web engine to
+    write what it still holds (FLUSH_GRACE, a countdown in the window), then
+    starts the installer in update mode (`/P /UPDATE /R`: a progress bar, no
+    question, the version in place not uninstalled, so settings stay, and the
+    new launcher started at the end) and quits; the AppImage is replaced by a
+    rename and started again once this launcher has quit;
+  - **macOS** (the `.dmg`) and a `.deb`/`.rpm` install are handed to the
+    system: the disk image opens in the Finder, the package in the software
+    centre, and the window says how to finish.
+  - An isolated run (end-to-end tests) downloads and checks for real but never
+    installs: it writes `update-dry-run.json` instead.
+
+Trust is the same as a download by hand (section 12): the release, its
+checksums and its public build. The installer is not signed; started by the
+launcher, it carries no download mark, so SmartScreen does not stop it, but
+Smart App Control, where enabled, still does.
 
 ## 14. Mobile
 
@@ -749,4 +782,5 @@ catalogue in the system's language, falling back to English.
 | 2026-10-04 | A Kynoko page may read the FILE of an installed font, not only its name: an app that draws text itself (shaping with HarfBuzz, embedding the glyphs it used in the PDF it exports) cannot do it with a name. `system_font_face` (family, weight, italic) picks the installed face the way CSS does (normal width, then the style, then the nearest weight), among the faces that are files on disk, and answers a number that stands for it during this run and its index in its file (`.ttc` collections); `system_font_file` reads that face's file with the number (raw bytes, 128 MiB at most, off the window's thread, refused if no longer a font). Both share the one scan of `system_fonts`, and are granted in the "kynoko-window" capability only (Kynoko origins, app windows). Never a path, never another file. The font stays licensed to the computer: honouring its embedding permissions (OS/2 fsType) when exporting is the app's responsibility. This replaces the "never a font file" of 2026-09-30 with "never a path, never another file". |
 | 2026-10-05 | Large files through the bridge, for the apps' project files (ZIP containers of several GB: a video project embeds its media). `GET content` honours one `Range` (`206`, `416`, `Accept-Ranges`, the slice streamed from disk) and always sends `Content-Length`. `POST append` adds the body at the end of the file IN PLACE, under an exclusive lock, `If-Match` checked again under it, synced before the answer, cut back on a failed write; a crash may leave a torn tail after the old content, which the container's reader skips (it reads the last complete central directory): accepted, since a temporary copy and a swap would write the gigabytes again at every save. `POST save-as` shows the system's save dialog (rfd, MIT: common item dialog, `NSSavePanel`, XDG portal), brought in front of the browser (Windows: an always-on-top owner window put in front first), writes the body where the user picked, the safe way, and answers a new session for the same origin: the page suggests a name, never a path. `meta` lists these `features`. A refused write reads the rest of its body before answering. Older pages are unchanged. |
 | 2026-10-05 | A Kynoko app's files look like Kynoko's: their icon is the facade's, cut to Boréal's facet (kynoko-ui's corners: top-left and bottom-right ample, a quarter of the side, the other two sharp, 6 %, as measured on the Kynoko tile), with the Kynoko mark (the platform's own icon, the mushroom tile, read from https://kynoko.com/manifest.webmanifest at run time, kept a week) small in the bottom-right corner the facet frees, parted from the drawing by a transparent ring so that it reads in light and dark folders. Without the mark (never had, offline), the facet alone. A new version writes the associations again, so the icons already set are redrawn on the update. |
+| 2026-10-08 | "Download and install" beside "Download" (section 13): asked for by the user, never automatic. The launcher fetches the release's file for its system, checks it against GitHub's SHA-256, and installs it in place on Windows (NSIS update mode, after closing its Kynoko windows through their unsaved-work guard and letting the web engine write) or hands it to the system (macOS disk image, Linux packages); the AppImage is replaced in place. The idle watch does not quit while an install waits. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

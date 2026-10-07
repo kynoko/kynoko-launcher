@@ -199,6 +199,9 @@ select {
 button { cursor: pointer; font-weight: 600; }
 button.primary { background: var(--kynoko-brand-gradient); color: #fff; border: 0; }
 button.danger { color: var(--kynoko-danger); }
+/* A button that cannot be used now (a check, an install under way) looks it. */
+button:disabled { opacity: 0.5; cursor: default; }
+button:disabled:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.28); }
 :focus-visible { outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
 button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-visible, button.link:focus-visible { box-shadow: none; outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
 
@@ -227,7 +230,34 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
 /* What "Check now" found. */
 .check-report { margin-block-start: 10px; font-size: 0.86rem; }
 .check-report p { margin: 2px 0; }
-.check-report .newer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 600; }
+/* The newer version: a card of its own under the report. */
+.check-report .update { margin-block-start: 10px; display: grid; gap: 4px; }
+.check-report .update p { margin: 0; }
+.update .update-title { font-weight: 700; font-size: 0.95rem; }
+.update .note { margin: 0; }
+/* Its two buttons, one height, one line, aligned on the card's start. */
+.update-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin-block-start: 10px; }
+/* "Download" says where from, in small, on the same line and baseline: one
+   line of text, centred in the button like its neighbour's. */
+button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 500; opacity: 0.75; }
+/* Where an install is: its words and Cancel on one line, the download's bar
+   under them, the card's whole width. */
+.update .install {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin-block-start: 12px; padding-block-start: 12px;
+  border-block-start: 1px solid var(--kynoko-hairline);
+}
+.update .install-text { flex: 1; min-inline-size: 12em; }
+.update .install.failed .install-text { color: var(--kynoko-danger); }
+.update .install.cancelled .install-text { color: var(--kynoko-hint); }
+.update .install progress {
+  flex-basis: 100%; inline-size: 100%; block-size: 6px;
+  appearance: none; border: 0; border-radius: 999px; overflow: hidden;
+  background: var(--kynoko-hairline-strong);
+}
+.update .install progress::-webkit-progress-bar { background: var(--kynoko-hairline-strong); border-radius: 999px; }
+.update .install progress::-webkit-progress-value { background: var(--kynoko-brand-gradient); border-radius: 999px; }
+.update .install progress::-moz-progress-bar { background: var(--kynoko-brand-gradient); border-radius: 999px; }
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-block-start: 26px; }
 /* The reset: apart from the rest, its effect written beside it. */
 .reset {

@@ -264,9 +264,101 @@ function iconOf(code: string): HTMLElement {
 }
 
 /** What "Check now" answers (see check_catalogue). */
-interface CheckReport { catalogue: string; catalogueError: string | null; current: string; latest: string | null; newer: boolean }
+interface CheckReport { catalogue: string; catalogueError: string | null; current: string; latest: string | null; newer: boolean; installable: boolean }
 let checking = false;
 let lastCheck: CheckReport | null = null;
+
+/** The newer version downloaded and checked (update_download). */
+interface UpdateReady { version: string; mode: 'restart' | 'handoff'; windows: number; files: number }
+/** Where "Download and install" is. */
+type Install =
+  | { phase: 'downloading'; received: number; total: number }
+  | { phase: 'waiting' }
+  | { phase: 'flushing'; seconds: number }
+  | { phase: 'restarting' }
+  | { phase: 'handed' }
+  | { phase: 'cancelled' }
+  | { phase: 'failed'; error: string };
+let install: Install | null = null;
+/** The system the window runs on (State.os), as of the last render. */
+let currentOs = '';
+/** An install under way: the buttons wait. */
+function installing(): boolean {
+  return !!install && !['handed', 'cancelled', 'failed'].includes(install.phase);
+}
+
+function installText(i: Install): string {
+  switch (i.phase) {
+    case 'downloading': {
+      const ratio = i.total ? i.received / i.total : 0;
+      return t(lang, 'INSTALL_DOWNLOADING', { percent: new Intl.NumberFormat(lang, { style: 'percent' }).format(ratio) });
+    }
+    case 'waiting': return t(lang, 'INSTALL_WAITING');
+    case 'flushing': return t(lang, 'INSTALL_FLUSHING', { seconds: String(i.seconds) });
+    case 'restarting': return t(lang, 'INSTALL_RESTARTING');
+    case 'handed': return t(lang, currentOs === 'macos' ? 'INSTALL_HANDED_MACOS' : 'INSTALL_HANDED_LINUX');
+    case 'cancelled': return t(lang, 'INSTALL_CANCELLED');
+    case 'failed': return t(lang, 'INSTALL_FAILED', { error: i.error });
+  }
+}
+
+/** The install's line under the announcement: its words, the download's bar,
+ *  and while the Kynoko windows are awaited, a way to give up. */
+function installLine(i: Install): HTMLElement {
+  const line = el('div', { class: `install ${i.phase}`, id: 'install-line', role: 'status' }, el('span', { class: 'install-text' }, installText(i)));
+  if (i.phase === 'waiting' || i.phase === 'flushing') {
+    const cancel = el('button', { type: 'button' }, t(lang, 'INSTALL_CANCEL'));
+    cancel.addEventListener('click', () => void invoke('update_cancel'));
+    line.append(cancel);
+  }
+  if (i.phase === 'downloading') line.append(el('progress', { max: i.total || 1, value: i.received }));
+  return line;
+}
+
+/** Repaints the install's line alone: the download reports several times a second. */
+function paintInstall(): void {
+  const line = document.getElementById('install-line');
+  if (line && install) line.replaceWith(installLine(install));
+  else void render();
+}
+
+/**
+ * "Download and install": the release's file for this system, downloaded
+ * and checked by the launcher (update.rs), then installed. Installing in
+ * place closes the launcher and its Kynoko windows (each asks about unsaved
+ * work first) and starts the new version: said first when something is open.
+ */
+async function startInstall(): Promise<void> {
+  install = { phase: 'downloading', received: 0, total: 0 };
+  await render();
+  let ready: UpdateReady;
+  try {
+    ready = await invoke<UpdateReady>('update_download');
+  } catch (e) {
+    install = { phase: 'failed', error: String(e) };
+    await render();
+    return;
+  }
+  if (ready.mode === 'restart' && (ready.windows > 0 || ready.files > 0)) {
+    const said = [t(lang, 'INSTALL_CLOSES', { version: ready.version })];
+    if (ready.windows > 0) said.push(t(lang, 'INSTALL_WINDOWS'));
+    if (ready.files > 0) said.push(t(lang, 'INSTALL_FILES'));
+    if (!confirm(said.join('\n\n'))) {
+      install = { phase: 'cancelled' };
+      await render();
+      return;
+    }
+  }
+  install = { phase: ready.mode === 'restart' && ready.windows > 0 ? 'waiting' : 'restarting' };
+  paintInstall();
+  try {
+    const outcome = await invoke<string>('update_install');
+    install = outcome === 'handed' ? { phase: 'handed' } : outcome === 'cancelled' ? { phase: 'cancelled' } : { phase: 'restarting' };
+  } catch (e) {
+    install = { phase: 'failed', error: String(e) };
+  }
+  await render();
+}
 
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
@@ -279,6 +371,7 @@ async function run(action: () => Promise<unknown>): Promise<void> {
 
 async function render(): Promise<void> {
   const state = await invoke<State>('get_state', { lang });
+  currentOs = state.os;
   root.replaceChildren();
 
   root.append(el('h1', {}, 'Kynoko Launcher'), el('p', { class: 'lead' }, t(lang, 'LEAD')));
@@ -388,13 +481,13 @@ async function render(): Promise<void> {
     });
   });
   const date = new Date(state.catalogueDate);
-  const check = el('button', { type: 'button', disabled: checking }, t(lang, checking ? 'CHECKING' : 'CHECK_NOW'));
+  const check = el('button', { type: 'button', disabled: checking || installing() }, t(lang, checking ? 'CHECKING' : 'CHECK_NOW'));
   check.addEventListener('click', () => {
     checking = true;
     lastCheck = null;
     void render();
     void invoke<CheckReport>('check_catalogue')
-      .then((r) => { lastCheck = r; }, (e) => { lastCheck = { catalogue: 'failed', catalogueError: String(e), current: state.version, latest: null, newer: false }; })
+      .then((r) => { lastCheck = r; }, (e) => { lastCheck = { catalogue: 'failed', catalogueError: String(e), current: state.version, latest: null, newer: false, installable: false }; })
       .finally(() => { checking = false; void render(); });
   });
   const status = el('span', { class: 'note' }, `Kynoko Launcher ${state.version} · ${t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) })}`);
@@ -409,9 +502,27 @@ async function render(): Promise<void> {
       : t(lang, 'CAT_FAILED', { error: c.catalogueError ?? '' });
     const report = el('div', { class: 'check-report', role: 'status' }, el('p', {}, catalogueLine));
     if (c.newer && c.latest) {
-      const download = el('button', { type: 'button', class: 'primary' }, t(lang, 'DOWNLOAD_NEW'));
+      // The newer version, in a card of its own: what it is, what is
+      // installed, "Download and install" where this system has a file in
+      // the release, "Download" (the release's page on GitHub) always, and
+      // where an install is.
+      const busy = installing();
+      const actions = el('div', { class: 'update-actions' });
+      if (c.installable) {
+        const both = el('button', { type: 'button', class: 'primary', disabled: busy }, t(lang, 'INSTALL_NEW'));
+        both.addEventListener('click', () => void startInstall());
+        actions.append(both);
+      }
+      const download = el('button', { type: 'button', class: c.installable ? 'from' : 'primary from', disabled: busy },
+        t(lang, 'DOWNLOAD_NEW'), el('small', {}, t(lang, 'DOWNLOAD_FROM')));
       download.addEventListener('click', () => void invoke('open_download'));
-      report.append(el('p', { class: 'newer' }, el('span', {}, t(lang, 'APP_NEWER', { version: c.latest })), download));
+      actions.append(download);
+      const card = el('section', { class: 'card update' },
+        el('p', { class: 'update-title' }, t(lang, 'APP_NEWER', { version: c.latest })),
+        el('p', { class: 'note' }, t(lang, 'APP_INSTALLED', { version: c.current })),
+        actions);
+      if (install) card.append(installLine(install));
+      report.append(card);
     } else {
       report.append(el('p', {}, c.latest ? t(lang, 'APP_UPTODATE', { version: c.current }) : t(lang, 'APP_UNKNOWN')));
     }
@@ -434,5 +545,19 @@ async function render(): Promise<void> {
 void listen('focus-app', () => void render());
 // The catalogue changed in the background: show the new one.
 void listen('catalogue-updated', () => void render());
+// Where "Download and install" is (update_download, update_install).
+void listen<{ received: number; total: number }>('update-progress', (e) => {
+  if (install?.phase !== 'downloading') return;
+  install = { phase: 'downloading', ...e.payload };
+  paintInstall();
+});
+void listen<number>('update-waiting', () => {
+  install = { phase: 'waiting' };
+  paintInstall();
+});
+void listen<number>('update-flushing', (e) => {
+  install = { phase: 'flushing', seconds: e.payload };
+  paintInstall();
+});
 
 void render();

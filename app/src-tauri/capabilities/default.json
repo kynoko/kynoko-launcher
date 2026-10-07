@@ -21,6 +21,9 @@
     "allow-launch",
     "allow-remove-everything",
     "allow-open-default-apps",
-    "allow-open-download"
+    "allow-open-download",
+    "allow-update-download",
+    "allow-update-install",
+    "allow-update-cancel"
   ]
 }

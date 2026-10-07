@@ -31,6 +31,7 @@ mod programs;
 mod settings;
 mod shortcuts;
 mod taskbar;
+mod update;
 mod xdg;
 
 use std::path::PathBuf;
@@ -143,6 +144,13 @@ struct Shared {
     /// by the bare start that precedes it, is then not shown).
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     opened_by_event: std::sync::atomic::AtomicBool,
+    /// "Download and install": the downloaded, checked file and how it installs
+    /// (update_download), and the user giving up the wait (update_cancel).
+    pending_update: Mutex<Option<(PathBuf, update::Mode)>>,
+    update_cancel: std::sync::atomic::AtomicBool,
+    /// update_install is closing the Kynoko windows and waiting: the idle
+    /// watch must not quit before the installer is started.
+    update_running: std::sync::atomic::AtomicBool,
 }
 
 impl Shared {
@@ -708,7 +716,9 @@ fn watch_idle(app: AppHandle) {
             || flushing;
         let live = shared.bridge.lock().expect("bridge lock").as_ref().map(|b| b.live()).unwrap_or(0);
         let waiting = shared.last_open.lock().expect("lock").map(|t| t.elapsed() < FIRST_CONTACT).unwrap_or(false);
-        if !window_shown && live == 0 && !waiting {
+        // An install under way quits by itself, once the installer is started.
+        let installing = shared.update_running.load(std::sync::atomic::Ordering::SeqCst);
+        if !window_shown && live == 0 && !waiting && !installing {
             app.exit(0);
             return;
         }
@@ -1016,24 +1026,9 @@ struct CheckReport {
     current: String,
     latest: Option<String>,
     newer: bool,
-}
-
-/// Where the launcher's releases are published (its public repository).
-const RELEASES_API: &str = "https://api.github.com/repos/kynoko/kynoko-launcher/releases/latest";
-pub(crate) const RELEASES_PAGE: &str = "https://github.com/kynoko/kynoko-launcher/releases/latest";
-
-/// The latest published version ("0.2.11"), from GitHub's public API.
-fn latest_release() -> Result<String, String> {
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(10)).build();
-    let release: serde_json::Value = agent
-        .get(RELEASES_API)
-        .set("User-Agent", "kynoko-launcher")
-        .set("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(|e| e.to_string())?
-        .into_json()
-        .map_err(|e| e.to_string())?;
-    release["tag_name"].as_str().map(|t| t.trim_start_matches('v').to_string()).ok_or_else(|| "no tag".to_string())
+    /// The newer version can be installed from here ("Download and install"): its
+    /// release has this system's file (update.rs).
+    installable: bool,
 }
 
 /// Whether `latest` is a newer version than `current` ("0.2.11" > "0.2.9").
@@ -1066,9 +1061,11 @@ async fn check_catalogue(app: AppHandle) -> Result<CheckReport, String> {
                 Err(e) => ("failed".to_string(), Some(e)),
             }
         };
-        let latest = latest_release().ok();
+        let release = update::latest().ok();
+        let latest = release.as_ref().map(|r| r.version.clone());
         let newer = latest.as_deref().is_some_and(|l| is_newer(l, &current));
-        CheckReport { catalogue, catalogue_error, current, latest, newer }
+        let installable = newer && release.is_some_and(|r| r.asset.is_some());
+        CheckReport { catalogue, catalogue_error, current, latest, newer, installable }
     })
     .await
     .map_err(|e| e.to_string())
@@ -1077,7 +1074,143 @@ async fn check_catalogue(app: AppHandle) -> Result<CheckReport, String> {
 /// Opens the page of the latest release in the system's browser.
 #[tauri::command]
 fn open_download() -> Result<(), String> {
-    launch::open(RELEASES_PAGE, None, None).map_err(|e| e.to_string())
+    launch::open(update::RELEASES_PAGE, None, None).map_err(|e| e.to_string())
+}
+
+/// The newer version downloaded and checked, ready to install
+/// (update_install). What installing will close, for the window to say so
+/// first.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateReady {
+    version: String,
+    mode: update::Mode,
+    /// Kynoko windows open now: installing closes them, each asking about
+    /// its unsaved work first.
+    windows: usize,
+    /// Files opened through the launcher in a browser: once it has quit,
+    /// their pages can no longer save them in place.
+    files: usize,
+}
+
+/// How far a download is, for the window (event "update-progress").
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateProgress {
+    received: u64,
+    total: u64,
+}
+
+/// "Download and install", step 1: the latest release's file for this system,
+/// downloaded and checked (update.rs). Only a version newer than this one.
+#[tauri::command]
+async fn update_download(app: AppHandle) -> Result<UpdateReady, String> {
+    let current = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        let release = update::latest()?;
+        if !is_newer(&release.version, &current) {
+            return Err(format!("{} is not newer than {current}", release.version));
+        }
+        let (_, mode) = update::wanted().ok_or("no installer for this system")?;
+        let mut last: Option<Instant> = None;
+        let path = update::download(&release, &update::dir(), |received, total| {
+            if last.is_none_or(|t| t.elapsed() >= Duration::from_millis(120)) || received == total {
+                last = Some(Instant::now());
+                let _ = app.emit_to("main", "update-progress", UpdateProgress { received, total });
+            }
+        })?;
+        let shared = app.state::<Shared>();
+        *shared.pending_update.lock().expect("lock") = Some((path, mode));
+        let windows = app.webview_windows().keys().filter(|l| l.starts_with("app-")).count();
+        let files = shared.bridge.lock().expect("bridge lock").as_ref().map(|b| b.live()).unwrap_or(0);
+        Ok(UpdateReady { version: release.version, mode, windows, files })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The longest an install waits for the Kynoko windows to close: a user still
+/// answering "Save?" in one of them, or who kept one open.
+const UPDATE_WAIT: Duration = Duration::from_secs(600);
+
+/// "Download and install", step 2: what update_download prepared. Handed to the system
+/// (Mode::Handoff): "handed". Installed in place (Mode::Restart): the Kynoko
+/// windows are closed first, each asking about its unsaved work (as when the
+/// user closes it), and once none is left and what the web engine still had
+/// to write is written (FLUSH_GRACE), the installer starts and this launcher
+/// quits. "cancelled" when update_cancel was called or a window stayed open.
+/// An isolated run (end-to-end tests) never installs over the machine's
+/// launcher: it writes what it would start to update-dry-run.json, "dry-run".
+#[tauri::command]
+async fn update_install(app: AppHandle) -> Result<String, String> {
+    let (path, mode) = app.state::<Shared>().pending_update.lock().expect("lock").clone().ok_or("nothing downloaded")?;
+    if mode == update::Mode::Handoff {
+        update::install(&path).map_err(|e| e.to_string())?;
+        return Ok("handed".into());
+    }
+    let shared = app.state::<Shared>();
+    shared.update_cancel.store(false, std::sync::atomic::Ordering::SeqCst);
+    shared.update_running.store(true, std::sync::atomic::Ordering::SeqCst);
+    tauri::async_runtime::spawn_blocking(move || {
+        let outcome = install_in_place(&app, &path);
+        app.state::<Shared>().update_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        outcome
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// update_install for Mode::Restart (see there).
+fn install_in_place(app: &AppHandle, path: &std::path::Path) -> Result<String, String> {
+    let shared = app.state::<Shared>();
+    let cancelled = || shared.update_cancel.load(std::sync::atomic::Ordering::SeqCst);
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("app-") {
+            let _ = window.close();
+        }
+    }
+    let deadline = Instant::now() + UPDATE_WAIT;
+    let mut said = None;
+    loop {
+        let open = app.webview_windows().keys().filter(|l| l.starts_with("app-")).count();
+        if open == 0 {
+            break;
+        }
+        if cancelled() || Instant::now() > deadline {
+            return Ok("cancelled".to_string());
+        }
+        if said != Some(open) {
+            said = Some(open);
+            let _ = app.emit_to("main", "update-waiting", open);
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    loop {
+        let since = shared.last_app_window.lock().expect("lock").map(|t| t.elapsed());
+        let left = since.map(|s| FLUSH_GRACE.saturating_sub(s)).unwrap_or_default();
+        if left.is_zero() {
+            break;
+        }
+        if cancelled() {
+            return Ok("cancelled".to_string());
+        }
+        let _ = app.emit_to("main", "update-flushing", left.as_secs() + 1);
+        thread::sleep(Duration::from_millis(500));
+    }
+    if settings::isolated() {
+        let plan = serde_json::json!({ "path": path, "args": update::WINDOWS_ARGS });
+        std::fs::write(settings::dir().join("update-dry-run.json"), plan.to_string()).map_err(|e| e.to_string())?;
+        return Ok("dry-run".to_string());
+    }
+    update::install(path).map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok("restarting".to_string())
+}
+
+/// The user gave up waiting for the Kynoko windows to close (update_install).
+#[tauri::command]
+fn update_cancel(shared: tauri::State<'_, Shared>) {
+    shared.update_cancel.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// One check of the online catalogue: Ok(true) when it changed (and was
@@ -1316,6 +1449,9 @@ pub fn run() {
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
             opened_by_event: std::sync::atomic::AtomicBool::new(false),
+            pending_update: Mutex::new(None),
+            update_cancel: std::sync::atomic::AtomicBool::new(false),
+            update_running: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             get_state,
@@ -1343,7 +1479,10 @@ pub fn run() {
             launch,
             remove_everything,
             open_default_apps,
-            open_download
+            open_download,
+            update_download,
+            update_install,
+            update_cancel
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -1352,6 +1491,9 @@ pub fn run() {
                 if let Err(e) = assoc::register_scheme(&mut Inventory::load()) {
                     eprintln!("kynoko-launcher: cannot register {}://: {e}", assoc::SCHEME);
                 }
+            }
+            if !cleaning && !settings::isolated() {
+                update::clean();
             }
             if !cleaning {
                 refresh_registrations(&handle);

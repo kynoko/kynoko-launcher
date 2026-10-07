@@ -25,6 +25,8 @@ dirs = "5"
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 fontdb = "0.24.0"
+# The installer of a new version checked against its release (update.rs).
+sha2 = "0.10"
 # The system's "Save as" dialog (MIT). Linux: through the XDG desktop portal,
 # loaded at run time; nothing to install to build.
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
