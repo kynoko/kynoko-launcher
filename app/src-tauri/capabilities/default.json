@@ -15,6 +15,7 @@
     "allow-set-associated",
     "allow-set-extension",
     "allow-set-shortcut-item",
+    "allow-answer-associations",
     "allow-app-icon",
     "allow-set-shortcuts",
     "allow-check-catalogue",

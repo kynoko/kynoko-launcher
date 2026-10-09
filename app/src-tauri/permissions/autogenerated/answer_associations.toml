@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-answer-associations"
+description = "Enables the answer_associations command without any pre-configured scope."
+commands.allow = ["answer_associations"]
+
+[[permission]]
+identifier = "deny-answer-associations"
+description = "Denies the answer_associations command without any pre-configured scope."
+commands.deny = ["answer_associations"]

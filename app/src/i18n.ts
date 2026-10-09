@@ -7,7 +7,8 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE' | 'RECOMMENDED_GROUP' | 'OTHER_BROWSERS' | 'LIMITS_WITH' | 'RECOMMEND_INSTALL'
   | 'APPS_TITLE' | 'ASSOCIATE' | 'SETTINGS_FOR' | 'SUMMARY_FILES' | 'SUMMARY_SHORTCUTS' | 'COUNT_OF' | 'NONE' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUT_ITEMS_WINDOWS' | 'SHORTCUT_ITEMS_MACOS' | 'SHORTCUT_ITEMS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
-  | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_UPDATED' | 'CAT_UNCHANGED' | 'CAT_FAILED' | 'CAT_RECENT' | 'APP_UPTODATE' | 'APP_NEWER' | 'APP_INSTALLED' | 'APP_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED',
+  | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_UPDATED' | 'CAT_UNCHANGED' | 'CAT_FAILED' | 'CAT_RECENT' | 'APP_UPTODATE' | 'APP_NEWER' | 'APP_INSTALLED' | 'APP_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED'
+  | 'WELCOME_TITLE' | 'WELCOME_DEFAULT' | 'WELCOME_WINDOWS' | 'WELCOME_ASSOCIATE' | 'WELCOME_LATER',
   string
 >;
 
@@ -78,6 +79,11 @@ const FR: Dict = {
   INSTALL_CANCEL: "Annuler",
   CATALOGUE_FAILED: "Mise à jour du catalogue impossible pour l'instant. Dernière vérification réussie : {{date}}.",
   CATALOGUE_BUNDLED: 'Catalogue fourni avec le programme, pas encore mis à jour en ligne.',
+  WELCOME_TITLE: "Ouvrir vos fichiers avec les apps Kynoko ?",
+  WELCOME_DEFAULT: "Les apps cochées deviennent le programme par défaut de leurs types de fichiers. Vous pourrez revenir en arrière à tout moment, app par app.",
+  WELCOME_WINDOWS: "Les apps cochées s'ajoutent à « Ouvrir avec » pour leurs types de fichiers, puis Windows vous laisse choisir le programme par défaut de chaque type. Vous pourrez revenir en arrière à tout moment, app par app.",
+  WELCOME_ASSOCIATE: "Associer",
+  WELCOME_LATER: "Plus tard",
 };
 
 const EN: Dict = {
@@ -147,6 +153,11 @@ const EN: Dict = {
   INSTALL_CANCEL: "Cancel",
   CATALOGUE_FAILED: 'The catalogue cannot be updated right now. Last successful check: {{date}}.',
   CATALOGUE_BUNDLED: 'Catalogue shipped with the program, not yet updated online.',
+  WELCOME_TITLE: "Open your files with the Kynoko apps?",
+  WELCOME_DEFAULT: "The ticked apps become the default program for their file types. You can undo this at any time, app by app.",
+  WELCOME_WINDOWS: "The ticked apps are added to \"Open with\" for their file types, then Windows lets you choose the default program for each type. You can undo this at any time, app by app.",
+  WELCOME_ASSOCIATE: "Associate",
+  WELCOME_LATER: "Later",
 };
 
 const ES: Dict = {
@@ -216,6 +227,11 @@ const ES: Dict = {
   INSTALL_CANCEL: "Cancelar",
   CATALOGUE_FAILED: 'Ahora mismo no se puede actualizar el catálogo. Última comprobación correcta: {{date}}.',
   CATALOGUE_BUNDLED: 'Catálogo incluido con el programa, aún no actualizado en línea.',
+  WELCOME_TITLE: "¿Abrir sus archivos con las apps de Kynoko?",
+  WELCOME_DEFAULT: "Las apps marcadas pasan a ser el programa predeterminado de sus tipos de archivo. Puede deshacerlo en cualquier momento, app por app.",
+  WELCOME_WINDOWS: "Las apps marcadas se añaden a «Abrir con» para sus tipos de archivo y, después, Windows le deja elegir el programa predeterminado de cada tipo. Puede deshacerlo en cualquier momento, app por app.",
+  WELCOME_ASSOCIATE: "Asociar",
+  WELCOME_LATER: "Más tarde",
 };
 
 const JA: Dict = {
@@ -285,6 +301,11 @@ const JA: Dict = {
   INSTALL_CANCEL: "キャンセル",
   CATALOGUE_FAILED: '現在カタログを更新できません。最後に成功した確認：{{date}}。',
   CATALOGUE_BUNDLED: 'プログラムに同梱のカタログです。まだオンラインで更新されていません。',
+  WELCOME_TITLE: "ファイルを Kynoko のアプリで開きますか？",
+  WELCOME_DEFAULT: "チェックしたアプリが、そのファイルの種類の既定のプログラムになります。いつでもアプリごとに元に戻せます。",
+  WELCOME_WINDOWS: "チェックしたアプリが、そのファイルの種類の「プログラムから開く」に追加されます。その後、種類ごとの既定のプログラムは Windows で選べます。いつでもアプリごとに元に戻せます。",
+  WELCOME_ASSOCIATE: "関連付ける",
+  WELCOME_LATER: "後で",
 };
 
 const ZH_HANS: Dict = {
@@ -354,6 +375,11 @@ const ZH_HANS: Dict = {
   INSTALL_CANCEL: "取消",
   CATALOGUE_FAILED: '目前无法更新目录。上次成功检查：{{date}}。',
   CATALOGUE_BUNDLED: '程序自带的目录，尚未在线更新。',
+  WELCOME_TITLE: "用 Kynoko 应用打开您的文件？",
+  WELCOME_DEFAULT: "勾选的应用将成为其文件类型的默认程序。您随时可以逐个应用撤销。",
+  WELCOME_WINDOWS: "勾选的应用会加入其文件类型的“打开方式”，之后 Windows 会让您为每种类型选择默认程序。您随时可以逐个应用撤销。",
+  WELCOME_ASSOCIATE: "关联",
+  WELCOME_LATER: "以后再说",
 };
 
 const ZH_HANT: Dict = {
@@ -423,6 +449,11 @@ const ZH_HANT: Dict = {
   INSTALL_CANCEL: "取消",
   CATALOGUE_FAILED: '目前無法更新目錄。上次成功檢查：{{date}}。',
   CATALOGUE_BUNDLED: '程式隨附的目錄，尚未在線上更新。',
+  WELCOME_TITLE: "用 Kynoko 應用程式開啟您的檔案？",
+  WELCOME_DEFAULT: "勾選的應用程式將成為其檔案類型的預設程式。您隨時可以逐一應用程式復原。",
+  WELCOME_WINDOWS: "勾選的應用程式會加入其檔案類型的「開啟檔案」，之後 Windows 會讓您為每種類型選擇預設程式。您隨時可以逐一應用程式復原。",
+  WELCOME_ASSOCIATE: "關聯",
+  WELCOME_LATER: "稍後再說",
 };
 
 const AR: Dict = {
@@ -492,6 +523,11 @@ const AR: Dict = {
   INSTALL_CANCEL: "إلغاء",
   CATALOGUE_FAILED: 'لا يمكن تحديث الكتالوج حاليًا. آخر تحقق ناجح: {{date}}.',
   CATALOGUE_BUNDLED: 'الكتالوج المرفق بالبرنامج، لم يُحدَّث عبر الإنترنت بعد.',
+  WELCOME_TITLE: "هل تريد فتح ملفاتك بتطبيقات Kynoko؟",
+  WELCOME_DEFAULT: "تصبح التطبيقات المحددة البرنامج الافتراضي لأنواع ملفاتها. يمكنك التراجع في أي وقت، تطبيقًا تطبيقًا.",
+  WELCOME_WINDOWS: "تُضاف التطبيقات المحددة إلى «فتح باستخدام» لأنواع ملفاتها، ثم يتيح لك Windows اختيار البرنامج الافتراضي لكل نوع. يمكنك التراجع في أي وقت، تطبيقًا تطبيقًا.",
+  WELCOME_ASSOCIATE: "ربط",
+  WELCOME_LATER: "لاحقًا",
 };
 
 const DICTS: Record<Lang, Dict> = { fr: FR, en: EN, es: ES, ja: JA, 'zh-Hans': ZH_HANS, 'zh-Hant': ZH_HANT, ar: AR };

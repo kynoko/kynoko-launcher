@@ -32,6 +32,8 @@ interface State {
   os: string;
   /** The app a `kynoko-launcher://settings?app=` link asked for. */
   focus: string | null;
+  /** The first start's question about the files is still to be answered. */
+  askAssociations: boolean;
 }
 
 const lang: Lang = pickLang(navigator.languages);
@@ -205,6 +207,53 @@ function filesOf(app: AppView): HTMLElement {
   return section;
 }
 
+/**
+ * The apps kept ticked in the first start's question, and the ones it has
+ * shown, kept across repaints: an app the online catalogue brings while the
+ * question is up (a first start begins with the bundled copy) comes ticked.
+ */
+const welcomeKept = new Set<string>();
+const welcomeSeen = new Set<string>();
+
+/**
+ * The first start's question (docs/SPEC.md, section 7): should the apps
+ * open the user's files? Every app with file types ticked, its types under
+ * its name, so that what it replaces is in view; answered once.
+ */
+function welcomeOf(state: State): HTMLElement | null {
+  const apps = state.apps.filter((a) => a.types.length);
+  if (!state.askAssociations || !apps.length) return null;
+  const kept = welcomeKept;
+  for (const app of apps) {
+    if (!welcomeSeen.has(app.code)) {
+      welcomeSeen.add(app.code);
+      kept.add(app.code);
+    }
+  }
+  const list = el('div', { class: 'welcome-apps', role: 'group', ariaLabel: t(lang, 'WELCOME_TITLE') });
+  const go = el('button', { type: 'button', class: 'primary' }, t(lang, 'WELCOME_ASSOCIATE'));
+  const sync = () => { go.disabled = kept.size === 0; };
+  for (const app of apps) {
+    const exts = app.types.flatMap((g) => g.exts).map((x) => '.' + x.ext).join(' ');
+    const tick = tickOf(kept.has(app.code), app.name, 'welcome-app', (on) => {
+      if (on) kept.add(app.code); else kept.delete(app.code);
+      sync();
+    });
+    // Extensions are technical: left to right whatever the language.
+    tick.append(el('small', { dir: 'ltr' }, exts));
+    list.append(tick);
+  }
+  sync();
+  go.addEventListener('click', () => void run(() => invoke('answer_associations', { codes: [...kept] })));
+  const later = el('button', { type: 'button' }, t(lang, 'WELCOME_LATER'));
+  later.addEventListener('click', () => void run(() => invoke('answer_associations', { codes: [] })));
+  return el('section', { class: 'card welcome' },
+    el('h2', {}, t(lang, 'WELCOME_TITLE')),
+    el('p', { class: 'note' }, t(lang, state.windows ? 'WELCOME_WINDOWS' : 'WELCOME_DEFAULT')),
+    list,
+    el('div', { class: 'welcome-actions' }, go, later));
+}
+
 /** Which accordions are open, per app (this window only: a convenience). */
 function isOpen(id: string): boolean {
   try { return localStorage.getItem('open:' + id) === '1'; } catch { return false; }
@@ -375,6 +424,8 @@ async function render(): Promise<void> {
   root.replaceChildren();
 
   root.append(el('h1', {}, 'Kynoko Launcher'), el('p', { class: 'lead' }, t(lang, 'LEAD')));
+  const welcome = welcomeOf(state);
+  if (welcome) root.append(welcome);
 
   // The default browser: one line, what every app follows unless it has its own.
   const browserCard = el('div', { class: 'browser-default' });
@@ -545,6 +596,8 @@ async function render(): Promise<void> {
 void listen('focus-app', () => void render());
 // The catalogue changed in the background: show the new one.
 void listen('catalogue-updated', () => void render());
+// Something written in the background (the first start's shortcuts): show it.
+void listen('state-changed', () => void render());
 // Where "Download and install" is (update_download, update_install).
 void listen<{ received: number; total: number }>('update-progress', (e) => {
   if (install?.phase !== 'downloading') return;

@@ -202,7 +202,7 @@ When a new catalogue arrives, Kynoko Launcher applies the difference:
 
 | Change | Effect |
 |---|---|
-| New app | Listed as available; nothing installed without the user. |
+| New app | Gets its shortcuts (the app and its listed façades), like every app at the first start; its file types wait for its switch. An app the user took out of the menu is never put back (`knownApps`). |
 | App removed or `status` not live | Its shortcuts and associations are removed; the user is told in the window. |
 | New façade | Its shortcut is added in the app's submenu if the app is installed. |
 | New extension on a façade | Associated if the app is installed and the user did not opt out of that extension. |
@@ -276,8 +276,11 @@ browser gives a clear message instead of a dead icon.
 - Shortcut `.app` bundles are created locally, so they carry no quarantine
   attribute and open without a Gatekeeper warning. They still need an ad hoc
   signature on Apple Silicon (section 12).
-- By default: the app shortcut is created; façade shortcuts are offered as
-  checkboxes.
+- First start (nothing chosen yet): every app gets its shortcuts, the app
+  and each listed façade, in the Kynoko place, named in the window's
+  language; each can be unticked. A launcher already set up by hand (some
+  app associated or given shortcuts) keeps its choices, and "Reset
+  everything" does not bring them back.
 - Later, not v1: façades in the Windows taskbar jump list.
 - **Taskbar identity (Windows)**: an app's windows and its Start menu
   entries carry the app's own application identity (AppUserModelID
@@ -298,6 +301,12 @@ browser gives a clear message instead of a dead icon.
 For each installed app, each extension declared by its façades, unless the
 user turned it off. When several façades or apps claim an extension, the one
 marked `primary` is proposed and the user can pick another.
+
+On the first start the window asks once, above everything else: "Open your
+files with the Kynoko apps?", every app with file types ticked and its types
+listed under its name, so that what the answer replaces is in view.
+"Associate" registers the ticked apps; "Later" leaves every app's switch off.
+Nothing takes a file type over without that answer or the app's own switch.
 
 ### Registration
 
@@ -599,7 +608,15 @@ in `0-template`, then adopted by Office, Photo Studio and Media Studio.
 |---|---|---|
 | Windows | NSIS installer from Tauri, **per-user**, no admin rights | `%LOCALAPPDATA%`, `HKCU` only |
 | macOS | `.dmg` with `Kynoko Launcher.app` | `/Applications` or `~/Applications` |
-| Linux | `.deb`, `.rpm`, AppImage | user-level integration in `~/.local` and `~/.config` |
+| Linux | `.deb`, `.rpm`, AppImage | user-level integration in `~/.local` and `~/.config`; the AppImage installs itself on its first start (below) |
+
+The AppImage, downloaded wherever the browser put it, installs itself on its
+first start: a copy in `~/.local/share/kynoko-launcher/` (executable) and its
+own "Kynoko Launcher" menu entry, so the shortcuts and file types it writes
+never point into a Downloads folder someone may tidy. Started from elsewhere,
+a newer version replaces the copy, an older one leaves it; "Download and
+install" updates the copy. Resetting the choices leaves it installed;
+`kynoko-launcher cleanup` removes it with the rest.
 
 ### Inventory
 
@@ -783,4 +800,5 @@ catalogue in the system's language, falling back to English.
 | 2026-10-05 | Large files through the bridge, for the apps' project files (ZIP containers of several GB: a video project embeds its media). `GET content` honours one `Range` (`206`, `416`, `Accept-Ranges`, the slice streamed from disk) and always sends `Content-Length`. `POST append` adds the body at the end of the file IN PLACE, under an exclusive lock, `If-Match` checked again under it, synced before the answer, cut back on a failed write; a crash may leave a torn tail after the old content, which the container's reader skips (it reads the last complete central directory): accepted, since a temporary copy and a swap would write the gigabytes again at every save. `POST save-as` shows the system's save dialog (rfd, MIT: common item dialog, `NSSavePanel`, XDG portal), brought in front of the browser (Windows: an always-on-top owner window put in front first), writes the body where the user picked, the safe way, and answers a new session for the same origin: the page suggests a name, never a path. `meta` lists these `features`. A refused write reads the rest of its body before answering. Older pages are unchanged. |
 | 2026-10-05 | A Kynoko app's files look like Kynoko's: their icon is the facade's, cut to Boréal's facet (kynoko-ui's corners: top-left and bottom-right ample, a quarter of the side, the other two sharp, 6 %, as measured on the Kynoko tile), with the Kynoko mark (the platform's own icon, the mushroom tile, read from https://kynoko.com/manifest.webmanifest at run time, kept a week) small in the bottom-right corner the facet frees, parted from the drawing by a transparent ring so that it reads in light and dark folders. Without the mark (never had, offline), the facet alone. A new version writes the associations again, so the icons already set are redrawn on the update. |
 | 2026-10-08 | "Download and install" beside "Download" (section 13): asked for by the user, never automatic. The launcher fetches the release's file for its system, checks it against GitHub's SHA-256, and installs it in place on Windows (NSIS update mode, after closing its Kynoko windows through their unsaved-work guard and letting the web engine write) or hands it to the system (macOS disk image, Linux packages); the AppImage is replaced in place. The idle watch does not quit while an install waits. |
+| 2026-10-09 | First start, asked for by the user after a first try on Ubuntu and Mint ("no app in the menu, nothing associated"; nothing was, by design, until each app was switched on): every app gets its shortcuts at once, and the window asks once whether the apps open the user's files (all ticked, the types in view, "Associate" or "Later"), rather than taking the types over silently: on Linux and macOS that answer makes them the default. A launcher already set up by hand is left as it is. The AppImage installs itself (a copy in `~/.local/share/kynoko-launcher`, its own menu entry), which also gives it a place in the menu; the `.deb` and `.rpm` have theirs already. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

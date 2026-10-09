@@ -691,6 +691,11 @@ fn dispatch(app: &AppHandle, command: Command) {
         Command::Launch(target) => launch_app(&shared, &target),
         Command::Cleanup { keep_preferences } => {
             let r = cleanup(keep_preferences);
+            // What one runs before deleting the AppImage: its own install goes too.
+            #[cfg(target_os = "linux")]
+            if !keep_preferences {
+                linux::remove_self();
+            }
             app.exit(if r.is_ok() { 0 } else { 1 });
             r
         }
@@ -776,6 +781,8 @@ struct StateView {
     os: String,
     /// The app to put forward, once.
     focus: Option<String>,
+    /// The first start's question: should the apps open the user's files?
+    ask_associations: bool,
 }
 
 #[derive(Serialize)]
@@ -825,6 +832,11 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         let _ = settings.save();
     }
     let catalogue = shared.catalogue();
+    if settings.welcome_shortcuts {
+        settings.welcome_shortcuts = false;
+        let _ = settings.save();
+        shortcuts_for_new_apps(app.clone(), catalogue.clone(), lang.clone());
+    }
     let cache = Cache::load();
     StateView {
         apps: catalogue
@@ -868,7 +880,84 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         windows: cfg!(windows),
         os: std::env::consts::OS.to_string(),
         focus: shared.focus.lock().expect("lock").take(),
+        ask_associations: settings.ask_associations,
     }
+}
+
+/// One run of shortcuts_for_new_apps at a time (the first window and a new
+/// catalogue may both start one).
+static NEW_APPS: Mutex<()> = Mutex::new(());
+
+/// Every app the launcher meets for the first time (see Settings::known_apps)
+/// gets its shortcuts, named in `lang`: at the first start, the apps of the
+/// catalogue then at hand, and later the ones a newer catalogue brings (the
+/// first start has only the bundled copy for a few seconds). Off the
+/// window's thread (each icon is fetched); the window is told when done.
+fn shortcuts_for_new_apps(app: AppHandle, catalogue: Catalogue, lang: String) {
+    thread::spawn(move || {
+        let _one = NEW_APPS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inventory = Inventory::load();
+        let mut changed = false;
+        for a in &catalogue.apps {
+            // Read again each time: the window may have changed a choice meanwhile.
+            let mut settings = Settings::load();
+            if settings.known_apps.contains(&a.code) {
+                continue;
+            }
+            if !settings.shortcut_apps.contains(&a.code) && !shortcuts::all_items(a, &settings, &lang).is_empty() {
+                // Met again later when it could not be written (left unknown).
+                if shortcuts::create(a, &settings, &lang, &mut inventory).is_err() {
+                    continue;
+                }
+                settings.shortcut_apps.push(a.code.clone());
+            }
+            settings.known_apps.push(a.code.clone());
+            let _ = settings.save();
+            changed = true;
+        }
+        if changed {
+            let _ = app.emit("state-changed", ());
+        }
+    });
+}
+
+/// Marks the first start (see Settings::welcomed). A launcher with apps
+/// already associated or given shortcuts was set up by hand before this
+/// welcome existed: it keeps its choices, the apps it lists now counted as
+/// met (only apps the catalogue brings later get shortcuts by themselves).
+fn welcome(catalogue: &Catalogue) {
+    let mut settings = Settings::load();
+    if settings.welcomed {
+        return;
+    }
+    if settings.associated_apps.is_empty() && settings.shortcut_apps.is_empty() {
+        settings.welcome_shortcuts = true;
+        settings.ask_associations = true;
+    } else {
+        settings.known_apps = catalogue.apps.iter().map(|a| a.code.clone()).collect();
+    }
+    settings.welcomed = true;
+    let _ = settings.save();
+}
+
+/// The first start's question, answered: the apps the user kept ticked open
+/// their files from now on (none: each app keeps its own switch, off).
+#[tauri::command]
+fn answer_associations(shared: tauri::State<'_, Shared>, codes: Vec<String>) -> Result<(), String> {
+    let catalogue = shared.catalogue();
+    let mut settings = Settings::load();
+    let mut inventory = Inventory::load();
+    for code in codes {
+        let Some(app) = catalogue.app(&code) else { continue };
+        if settings.associated_apps.contains(&code) || app.extensions().is_empty() {
+            continue;
+        }
+        assoc::register(&settings.chosen(app), &settings, &mut inventory).map_err(|e| e.to_string())?;
+        settings.associated_apps.push(code);
+        settings.save().map_err(|e| e.to_string())?;
+    }
+    settings.ask_associations = false;
+    settings.save().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1226,6 +1315,12 @@ fn check_online(app: &AppHandle) -> Result<bool, String> {
             reconcile(&old, &fresh);
             *shared.catalogue.write().expect("catalogue lock") = fresh;
             let _ = app.emit("catalogue-updated", ());
+            // New apps join the menu (not before the first window has had its turn).
+            let settings = Settings::load();
+            if settings.welcomed && !settings.welcome_shortcuts && !settings::isolated() {
+                let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
+                shortcuts_for_new_apps(app.clone(), shared.catalogue(), lang);
+            }
             Ok(true)
         }
         Refresh::Unchanged => Ok(false),
@@ -1239,8 +1334,9 @@ fn check_online(app: &AppHandle) -> Result<bool, String> {
 
 /// What a new catalogue changes in what the user set up (docs/SPEC.md,
 /// section 4): an app that left loses its associations and shortcuts; a
-/// changed app has them rebuilt from its new definition. Nothing is ever
-/// added the user did not ask for: only apps already chosen are touched.
+/// changed app has them rebuilt from its new definition. Only apps already
+/// chosen are touched here; a new app's shortcuts come from
+/// shortcuts_for_new_apps, its file types only from its switch.
 fn reconcile(old: &Catalogue, new: &Catalogue) {
     let mut settings = Settings::load();
     let mut inventory = Inventory::load();
@@ -1365,9 +1461,13 @@ fn launch(shared: tauri::State<'_, Shared>, target: String) -> Result<(), String
     launch_app(&shared, &target)
 }
 
+/// "Reset everything": what was written goes, and the choices with it, but
+/// not the welcome nor the apps met: nothing puts the shortcuts back.
 #[tauri::command]
-fn remove_everything() -> Result<(), String> {
-    cleanup(false)
+fn remove_everything(shared: tauri::State<'_, Shared>) -> Result<(), String> {
+    cleanup(false)?;
+    let known_apps = shared.catalogue().apps.iter().map(|a| a.code.clone()).collect();
+    Settings { welcomed: true, known_apps, ..Settings::default() }.save().map_err(|e| e.to_string())
 }
 
 /// Windows: the Default apps page, on the launcher's own entry.
@@ -1462,6 +1562,7 @@ pub fn run() {
             set_associated,
             set_extension,
             set_shortcut_item,
+            answer_associations,
             own_window_drag,
             own_window_minimize,
             own_window_toggle_maximize,
@@ -1494,6 +1595,12 @@ pub fn run() {
             }
             if !cleaning && !settings::isolated() {
                 update::clean();
+                // The AppImage installs itself first: what follows registers its copy.
+                #[cfg(target_os = "linux")]
+                if let Err(e) = linux::install_self(&handle.package_info().version.to_string()) {
+                    eprintln!("kynoko-launcher: cannot install the AppImage: {e}");
+                }
+                welcome(&handle.state::<Shared>().catalogue());
             }
             if !cleaning {
                 refresh_registrations(&handle);

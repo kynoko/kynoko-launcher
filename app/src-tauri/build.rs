@@ -13,6 +13,7 @@ fn main() {
         "set_associated",
         "set_extension",
         "set_shortcut_item",
+        "answer_associations",
         "app_icon",
         "set_shortcuts",
         "check_catalogue",

@@ -49,6 +49,18 @@ pub struct Settings {
     /// The launcher version that last wrote the associations: a new version
     /// writes them again (names, icons and commands may have changed).
     pub registered_by: Option<String>,
+    /// The first start's welcome is done (docs/SPEC.md, sections 6 and 7):
+    /// a launcher with nothing chosen yet gives every app its shortcuts and
+    /// asks once about the files; one already set up by hand is only marked.
+    pub welcomed: bool,
+    /// The first window writes every app's shortcuts, in its language.
+    pub welcome_shortcuts: bool,
+    /// The window asks whether the apps open the user's files, until answered.
+    pub ask_associations: bool,
+    /// The apps the launcher has met. One met for the first time (the first
+    /// start, a new app in the catalogue) gets its shortcuts: every app is in
+    /// the menu unless the user took it out, and then it stays out.
+    pub known_apps: Vec<String>,
     /// Where each app is opened, when not at its catalogue address (testing
     /// against another environment). Never written by the launcher itself.
     pub app_urls: HashMap<String, String>,

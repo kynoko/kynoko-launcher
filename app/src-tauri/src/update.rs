@@ -237,9 +237,14 @@ pub fn install(path: &Path) -> io::Result<()> {
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn install(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    let Some(target) = std::env::var_os("APPIMAGE").map(PathBuf::from) else {
+    let Some(running) = std::env::var_os("APPIMAGE").map(PathBuf::from) else {
         return Command::new("xdg-open").arg(path).spawn().map(|_| ());
     };
+    // The installed copy (linux.rs, install_self), what the menu starts.
+    #[cfg(target_os = "linux")]
+    let target = crate::linux::appimage_target(&running);
+    #[cfg(not(target_os = "linux"))]
+    let target = running;
     // The AppImage replaced in place by a rename (the running one keeps the
     // file it has open), then started once this launcher has quit: a second
     // launcher would only hand its start over to this one.

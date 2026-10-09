@@ -29,12 +29,102 @@ fn mimeapps() -> PathBuf {
 }
 
 /// The program to register: the AppImage file itself when run from one (the
-/// running binary lives in a mount that disappears when it exits).
+/// running binary lives in a mount that disappears when it exits), its
+/// installed copy once there is one (see install_self).
 fn exe() -> String {
-    std::env::var("APPIMAGE")
-        .ok()
-        .filter(|p| !p.is_empty())
-        .unwrap_or_else(|| std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default())
+    match appimage() {
+        Some(running) => appimage_target(&running).to_string_lossy().into_owned(),
+        None => std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+    }
+}
+
+/* ---------------------------------------------------------------- AppImage */
+
+/// The AppImage this launcher runs from, if it does (the .deb and the .rpm don't).
+fn appimage() -> Option<PathBuf> {
+    std::env::var_os("APPIMAGE").filter(|p| !p.is_empty()).map(PathBuf::from)
+}
+
+/// Where the AppImage installs itself: a place of its own, so that the
+/// shortcuts and file types it writes never point into a Downloads folder
+/// someone may tidy, and its menu entry stays valid.
+fn installed_appimage() -> PathBuf {
+    data_home().join("kynoko-launcher/kynoko-launcher.AppImage")
+}
+
+const SELF_ENTRY: &str = "kynoko-launcher.desktop";
+
+/// The launcher's icon, for its own menu entry (the release's, see the CI).
+const ICON: &[u8] = include_bytes!("../icons/128x128.png");
+
+/// The AppImage to register, run and update: the installed copy once it
+/// exists, else the one running.
+pub fn appimage_target(running: &Path) -> PathBuf {
+    let installed = installed_appimage();
+    if installed.is_file() {
+        installed
+    } else {
+        running.to_path_buf()
+    }
+}
+
+/// The AppImage installs itself (docs/SPEC.md, section 12): a copy in
+/// ~/.local/share/kynoko-launcher, executable, and its own "Kynoko Launcher"
+/// menu entry. Started from elsewhere, a newer version replaces the copy
+/// (an older one leaves it). Not in the inventory: resetting the launcher's
+/// choices leaves it installed; `cleanup`, what one runs before deleting
+/// the AppImage, removes it (remove_self).
+pub fn install_self(version: &str) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let Some(running) = appimage() else { return Ok(()) };
+    let installed = installed_appimage();
+    let dir = installed.parent().expect("a folder").to_path_buf();
+    let stamp = dir.join("version");
+    let same = std::fs::canonicalize(&running).ok().is_some_and(|r| std::fs::canonicalize(&installed).ok() == Some(r));
+    let kept = std::fs::read_to_string(&stamp).unwrap_or_default();
+    if !same && (!installed.is_file() || crate::is_newer(version, kept.trim())) {
+        std::fs::create_dir_all(&dir)?;
+        let next = dir.join(".kynoko-launcher.AppImage.new");
+        std::fs::copy(&running, &next)?;
+        std::fs::set_permissions(&next, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::rename(&next, &installed)?;
+        std::fs::write(&stamp, version)?;
+    } else if same && kept.trim() != version {
+        // Updated in place (update.rs): the copy is this version now.
+        std::fs::write(&stamp, version)?;
+    }
+    let icon = dir.join("kynoko-launcher.png");
+    if std::fs::read(&icon).ok().as_deref() != Some(ICON) {
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(&icon, ICON)?;
+    }
+    let entry = applications().join(SELF_ENTRY);
+    let text = xdg::render_entry(
+        &[
+            ("Type", "Application".into()),
+            ("Name", "Kynoko Launcher".into()),
+            ("Exec", xdg::exec_quote(&installed.to_string_lossy())),
+            ("Icon", icon.to_string_lossy().into_owned()),
+            ("Categories", "Utility;".into()),
+            ("Terminal", "false".into()),
+        ],
+        &[],
+    );
+    if std::fs::read_to_string(&entry).ok().as_deref() != Some(text.as_str()) {
+        std::fs::create_dir_all(applications())?;
+        std::fs::write(&entry, text)?;
+        refresh_menus();
+    }
+    Ok(())
+}
+
+/// Undoes install_self.
+pub fn remove_self() {
+    let _ = std::fs::remove_file(applications().join(SELF_ENTRY));
+    if let Some(dir) = installed_appimage().parent() {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    refresh_menus();
 }
 
 /* ---------------------------------------------------------------- browsers */
