@@ -243,6 +243,14 @@ browser **profile**, so the profile is part of the choice:
 
 - A **default browser + profile** is chosen at first run (proposal: the
   system's default browser, its default profile).
+- **What each app recommends, by default**: when the launcher first meets an
+  app (the first start, a new app in the catalogue), if the browser it would
+  follow (the default, else the system's: Windows' UserChoice, Linux'
+  `xdg-settings`) is not one it recommends, it gets the first one it
+  recommends that is installed (the Kynoko window for `kynoko`; for an
+  engine, the usual stable browser of it, one opening app windows before
+  Opera). Nothing recommended installed: it follows the default, and the
+  window suggests one to install. Apps met before keep their choice.
 - **Each app** follows the default unless it has its own browser + profile.
   Changing the default moves every app without an override.
 - Before switching an app to another browser or profile, the window warns that
@@ -801,4 +809,5 @@ catalogue in the system's language, falling back to English.
 | 2026-10-05 | A Kynoko app's files look like Kynoko's: their icon is the facade's, cut to Boréal's facet (kynoko-ui's corners: top-left and bottom-right ample, a quarter of the side, the other two sharp, 6 %, as measured on the Kynoko tile), with the Kynoko mark (the platform's own icon, the mushroom tile, read from https://kynoko.com/manifest.webmanifest at run time, kept a week) small in the bottom-right corner the facet frees, parted from the drawing by a transparent ring so that it reads in light and dark folders. Without the mark (never had, offline), the facet alone. A new version writes the associations again, so the icons already set are redrawn on the update. |
 | 2026-10-08 | "Download and install" beside "Download" (section 13): asked for by the user, never automatic. The launcher fetches the release's file for its system, checks it against GitHub's SHA-256, and installs it in place on Windows (NSIS update mode, after closing its Kynoko windows through their unsaved-work guard and letting the web engine write) or hands it to the system (macOS disk image, Linux packages); the AppImage is replaced in place. The idle watch does not quit while an install waits. |
 | 2026-10-09 | First start, asked for by the user after a first try on Ubuntu and Mint ("no app in the menu, nothing associated"; nothing was, by design, until each app was switched on): every app gets its shortcuts at once, and the window asks once whether the apps open the user's files (all ticked, the types in view, "Associate" or "Later"), rather than taking the types over silently: on Linux and macOS that answer makes them the default. A launcher already set up by hand is left as it is. The AppImage installs itself (a copy in `~/.local/share/kynoko-launcher`, its own menu entry), which also gives it a place in the menu; the `.deb` and `.rpm` have theirs already. |
+| 2026-10-09 | Asked for by the user: what is recommended is also the default for opening. An app met for the first time whose followed browser it does not recommend gets the first installed one it does (section 5): Office the Kynoko window, Media Studio, Photo Studio, PDF Editor and Games a Chromium browser when the system's is Firefox, QR Code Studio left on Firefox (it recommends both). Linux now knows the system's browser (`xdg-settings`, `xdg-mime`), which the window also shows. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |

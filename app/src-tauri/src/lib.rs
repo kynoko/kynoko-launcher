@@ -832,12 +832,15 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         let _ = settings.save();
     }
     let catalogue = shared.catalogue();
-    if settings.welcome_shortcuts {
+    // The first start meets its apps once the online catalogue has been
+    // asked (the bundled copy may be old): here when it already has, else
+    // after that check (meet_after_check).
+    let cache = Cache::load();
+    if settings.welcome_shortcuts && cache.checked_at > 0 {
         settings.welcome_shortcuts = false;
         let _ = settings.save();
-        shortcuts_for_new_apps(app.clone(), catalogue.clone(), lang.clone());
+        meet_new_apps(app.clone(), catalogue.clone(), lang.clone());
     }
-    let cache = Cache::load();
     StateView {
         apps: catalogue
             .apps
@@ -884,25 +887,39 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
     }
 }
 
-/// One run of shortcuts_for_new_apps at a time (the first window and a new
+/// One run of meet_new_apps at a time (the first window and a new
 /// catalogue may both start one).
 static NEW_APPS: Mutex<()> = Mutex::new(());
 
 /// Every app the launcher meets for the first time (see Settings::known_apps)
-/// gets its shortcuts, named in `lang`: at the first start, the apps of the
-/// catalogue then at hand, and later the ones a newer catalogue brings (the
-/// first start has only the bundled copy for a few seconds). Off the
-/// window's thread (each icon is fetched); the window is told when done.
-fn shortcuts_for_new_apps(app: AppHandle, catalogue: Catalogue, lang: String) {
+/// gets what is recommended: its shortcuts, named in `lang`, and, when the
+/// browser it would follow is not one it recommends, the first one it
+/// recommends that is installed (browsers::recommended_for). At the first
+/// start, the apps of the catalogue then at hand; later, the ones a newer
+/// catalogue brings (the first start has only the bundled copy for a few
+/// seconds). Off the window's thread (icons are fetched, browsers listed);
+/// the window is told when done.
+fn meet_new_apps(app: AppHandle, catalogue: Catalogue, lang: String) {
     thread::spawn(move || {
         let _one = NEW_APPS.lock().unwrap_or_else(|e| e.into_inner());
         let mut inventory = Inventory::load();
         let mut changed = false;
+        let installed: Vec<browsers::Browser> = std::iter::once(browsers::embedded()).chain(browsers::installed()).collect();
+        let system = browsers::system_default();
         for a in &catalogue.apps {
             // Read again each time: the window may have changed a choice meanwhile.
             let mut settings = Settings::load();
             if settings.known_apps.contains(&a.code) {
                 continue;
+            }
+            if !settings.app_browsers.contains_key(&a.code) {
+                let current = match &settings.default_browser {
+                    Some(id) => installed.iter().find(|b| &b.id == id),
+                    None => system.as_ref(),
+                };
+                if let Some(id) = browsers::recommended_for(&a.browsers.recommended, current, &installed) {
+                    settings.app_browsers.insert(a.code.clone(), id);
+                }
             }
             if !settings.shortcut_apps.contains(&a.code) && !shortcuts::all_items(a, &settings, &lang).is_empty() {
                 // Met again later when it could not be written (left unknown).
@@ -1315,28 +1332,47 @@ fn check_online(app: &AppHandle) -> Result<bool, String> {
             reconcile(&old, &fresh);
             *shared.catalogue.write().expect("catalogue lock") = fresh;
             let _ = app.emit("catalogue-updated", ());
-            // New apps join the menu (not before the first window has had its turn).
-            let settings = Settings::load();
-            if settings.welcomed && !settings.welcome_shortcuts && !settings::isolated() {
-                let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
-                shortcuts_for_new_apps(app.clone(), shared.catalogue(), lang);
-            }
+            meet_after_check(app, true);
             Ok(true)
         }
-        Refresh::Unchanged => Ok(false),
+        Refresh::Unchanged => {
+            meet_after_check(app, false);
+            Ok(false)
+        }
         // Kept in the cache and shown quietly in the window; never a notification.
         Refresh::Failed(e) => {
             eprintln!("kynoko-launcher: catalogue not refreshed: {e}");
+            // Offline at the first start: the bundled copy it is.
+            meet_after_check(app, false);
             Err(e.to_string())
         }
+    }
+}
+
+/// After a check of the online catalogue: the first start's apps are met
+/// (once the window has said the language to name them in; else get_state
+/// meets them), and later the new apps a fresher catalogue brings.
+fn meet_after_check(app: &AppHandle, updated: bool) {
+    if settings::isolated() {
+        return;
+    }
+    let mut settings = Settings::load();
+    if settings.welcome_shortcuts {
+        let Some(lang) = settings.ui_lang.clone() else { return };
+        settings.welcome_shortcuts = false;
+        let _ = settings.save();
+        meet_new_apps(app.clone(), app.state::<Shared>().catalogue(), lang);
+    } else if updated && settings.welcomed {
+        let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".to_string());
+        meet_new_apps(app.clone(), app.state::<Shared>().catalogue(), lang);
     }
 }
 
 /// What a new catalogue changes in what the user set up (docs/SPEC.md,
 /// section 4): an app that left loses its associations and shortcuts; a
 /// changed app has them rebuilt from its new definition. Only apps already
-/// chosen are touched here; a new app's shortcuts come from
-/// shortcuts_for_new_apps, its file types only from its switch.
+/// chosen are touched here; a new app's shortcuts and browser come from
+/// meet_new_apps, its file types only from its switch.
 fn reconcile(old: &Catalogue, new: &Catalogue) {
     let mut settings = Settings::load();
     let mut inventory = Inventory::load();
@@ -1740,7 +1776,10 @@ mod tests {
     #[test]
     fn routing() {
         let c = Catalogue::bundled();
-        assert!(c.apps.iter().all(|a| a.facades.iter().all(|f| f.listed)), "bundled facades default to listed");
+        // The platform's drafts are kept (PDF Editor's only facade is one, and
+        // it carries .pdf), published facades listed.
+        assert!(c.app("Office").unwrap().facades.iter().all(|f| f.listed), "Office's facades are listed");
+        assert!(c.app("PdfEditor").unwrap().extensions().contains(&"pdf".to_string()));
         let all: Vec<String> = c.apps.iter().map(|a| a.code.clone()).collect();
         assert_eq!(c.app_for_ext("docx", &all).map(|a| a.code.as_str()), Some("Office"));
         assert_eq!(c.app_for_ext("JPG", &all).map(|a| a.code.as_str()), Some("PhotoStudio"));

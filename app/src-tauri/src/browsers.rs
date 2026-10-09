@@ -157,9 +157,79 @@ pub fn system_default() -> Option<Browser> {
     installed().into_iter().find(|b| b.exe.eq_ignore_ascii_case(&exe))
 }
 
-#[cfg(not(windows))]
+/// Linux: the desktop entry the desktop opens web links with
+/// (`xdg-settings`, else `xdg-mime`), when it is one of `installed`.
+#[cfg(target_os = "linux")]
+pub fn system_default() -> Option<Browser> {
+    let ask = |program: &str, args: &[&str]| {
+        std::process::Command::new(program)
+            .args(args)
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|id| id.ends_with(".desktop"))
+    };
+    let id = ask("xdg-settings", &["get", "default-web-browser"]).or_else(|| ask("xdg-mime", &["query", "default", "x-scheme-handler/https"]))?;
+    installed().into_iter().find(|b| b.id == id)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn system_default() -> Option<Browser> {
     None
+}
+
+/// The engine names apps speak of (catalogue::Browsers).
+fn engine_name(engine: &Engine) -> Option<&'static str> {
+    match engine {
+        Engine::Chromium => Some("chromium"),
+        Engine::Gecko => Some("gecko"),
+        Engine::Webkit => Some("webkit"),
+        _ => None,
+    }
+}
+
+/// Whether an app recommending `recommended` recommends `b`: by the engine
+/// it renders with, or, for the Kynoko window, by name (`kynoko`). The
+/// window's own rule (main.ts, recommends).
+pub fn recommends(recommended: &[String], b: &Browser) -> bool {
+    if b.id == EMBEDDED && recommended.iter().any(|r| r == "kynoko") {
+        return true;
+    }
+    engine_name(&b.web_engine).is_some_and(|e| recommended.iter().any(|r| r == e))
+}
+
+/// The browser an app is given when the launcher first meets it (docs/SPEC.md,
+/// section 5): None when the one it would follow (`current`: the default, or
+/// the system's) is one it recommends, or when none it recommends is
+/// installed; else the first it recommends, in its order, the usual stable
+/// browser of that engine first (one opening app windows before Opera).
+pub fn recommended_for(recommended: &[String], current: Option<&Browser>, installed: &[Browser]) -> Option<String> {
+    if recommended.is_empty() || current.is_some_and(|b| recommends(recommended, b)) {
+        return None;
+    }
+    for r in recommended {
+        if r == "kynoko" {
+            return Some(EMBEDDED.to_string());
+        }
+        let mut fit: Vec<&Browser> =
+            installed.iter().filter(|b| b.id != EMBEDDED && engine_name(&b.web_engine) == Some(r.as_str())).collect();
+        fit.sort_by_key(|b| preference(b));
+        if let Some(b) = fit.first() {
+            return Some(b.id.clone());
+        }
+    }
+    None
+}
+
+/// Lower first: the browser people usually mean by an engine.
+fn preference(b: &Browser) -> u8 {
+    let n = b.name.to_ascii_lowercase();
+    let usual = ["chrome", "firefox", "edge", "brave", "chromium", "vivaldi", "safari"]
+        .iter()
+        .position(|w| n.contains(w) && !(*w == "chrome" && n.contains("chromium")))
+        .unwrap_or(7) as u8;
+    let channel = ["canary", "beta", "dev", "nightly", "unstable", "developer"].iter().any(|c| n.contains(c));
+    usual + if channel { 10 } else { 0 } + if b.engine == Engine::Unknown { 20 } else { 0 }
 }
 
 #[cfg(target_os = "linux")]
@@ -367,5 +437,36 @@ mod tests {
         assert_eq!(executable_of(r#""C:\Program Files\X\x.exe" --flag"#), r"C:\Program Files\X\x.exe");
         assert_eq!(executable_of(r"C:\x.exe --flag"), r"C:\x.exe");
         assert_eq!(resolve_indirect(r"@C:\Program Files\X\x.exe,-100".into()), "x");
+    }
+
+    #[test]
+    fn recommended_at_first_meeting() {
+        let b = |id: &str, name: &str, engine: Engine, web: Engine| Browser {
+            id: id.into(),
+            name: name.into(),
+            exe: String::new(),
+            engine,
+            web_engine: web,
+            profiles: Vec::new(),
+            command: Vec::new(),
+        };
+        let firefox = b("firefox.desktop", "Firefox", Engine::Gecko, Engine::Gecko);
+        let nightly = b("nightly", "Firefox Nightly", Engine::Gecko, Engine::Gecko);
+        let opera = b("opera", "Opera", Engine::Unknown, Engine::Chromium);
+        let brave = b("brave", "Brave", Engine::Chromium, Engine::Chromium);
+        let chrome = b("chrome", "Google Chrome", Engine::Chromium, Engine::Chromium);
+        let installed = vec![opera.clone(), brave.clone(), chrome.clone(), nightly.clone(), firefox.clone()];
+        let rec = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // Following a browser it recommends: left as it is.
+        assert_eq!(recommended_for(&rec(&["chromium", "gecko"]), Some(&firefox), &installed), None);
+        // Chromium recommended, Firefox followed: the usual Chromium, not Opera nor Brave.
+        assert_eq!(recommended_for(&rec(&["chromium"]), Some(&firefox), &installed).as_deref(), Some("chrome"));
+        assert_eq!(recommended_for(&rec(&["chromium"]), None, &[opera.clone(), brave.clone()]).as_deref(), Some("brave"));
+        // Gecko: the stable Firefox before Nightly.
+        assert_eq!(recommended_for(&rec(&["gecko"]), Some(&chrome), &installed).as_deref(), Some("firefox.desktop"));
+        // The Kynoko window, by name; nothing recommended installed: left alone.
+        assert_eq!(recommended_for(&rec(&["kynoko"]), Some(&chrome), &installed).as_deref(), Some(EMBEDDED));
+        assert_eq!(recommended_for(&rec(&["chromium"]), Some(&firefox), &[firefox.clone()]), None);
+        assert_eq!(recommended_for(&[], Some(&firefox), &installed), None);
     }
 }
