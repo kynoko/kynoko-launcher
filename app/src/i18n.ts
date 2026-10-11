@@ -8,7 +8,8 @@ type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE' | 'RECOMMENDED_GROUP' | 'OTHER_BROWSERS' | 'LIMITS_WITH' | 'RECOMMEND_INSTALL'
   | 'APPS_TITLE' | 'ASSOCIATE' | 'SETTINGS_FOR' | 'SUMMARY_FILES' | 'SUMMARY_SHORTCUTS' | 'COUNT_OF' | 'NONE' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUT_ITEMS_WINDOWS' | 'SHORTCUT_ITEMS_MACOS' | 'SHORTCUT_ITEMS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_UPDATED' | 'CAT_UNCHANGED' | 'CAT_FAILED' | 'CAT_RECENT' | 'APP_UPTODATE' | 'APP_NEWER' | 'APP_INSTALLED' | 'APP_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED'
-  | 'WELCOME_TITLE' | 'WELCOME_DEFAULT' | 'WELCOME_WINDOWS' | 'WELCOME_ASSOCIATE' | 'WELCOME_LATER',
+  | 'WELCOME_TITLE' | 'WELCOME_DEFAULT' | 'WELCOME_WINDOWS' | 'WELCOME_ASSOCIATE' | 'WELCOME_LATER'
+  | 'ASSISTANTS_TITLE' | 'ASSISTANTS_LEAD' | 'ASSISTANTS_NONE' | 'ASSISTANTS_RESTART' | 'ASSISTANTS_ONLINE' | 'ASSISTANTS_MANUAL' | 'ASSISTANTS_MANUAL_HINT' | 'ASSISTANTS_COPY' | 'ASSISTANTS_COPIED' | 'ASSISTANTS_NOT_JSON' | 'ASSISTANTS_FAILED',
   string
 >;
 
@@ -84,6 +85,17 @@ const FR: Dict = {
   WELCOME_WINDOWS: "Les apps cochées s'ajoutent à « Ouvrir avec » pour leurs types de fichiers, puis Windows vous laisse choisir le programme par défaut de chaque type. Vous pourrez revenir en arrière à tout moment, app par app.",
   WELCOME_ASSOCIATE: "Associer",
   WELCOME_LATER: "Plus tard",
+  ASSISTANTS_TITLE: "Assistants IA",
+  ASSISTANTS_LEAD: "Un assistant installé sur cet ordinateur (Claude, Qwen, Codex...) peut utiliser les apps Kynoko pour créer et modifier vos documents. Il vous demande la permission dans chaque app, et vous pouvez l'arrêter à tout moment.",
+  ASSISTANTS_NONE: "Aucun assistant reconnu sur cet ordinateur : configurez le vôtre à la main ci-dessous.",
+  ASSISTANTS_RESTART: "Redémarrez l'assistant pour qu'il voie Kynoko.",
+  ASSISTANTS_ONLINE: "Assistants connectés en ce moment : {{n}}",
+  ASSISTANTS_MANUAL: "Configuration manuelle",
+  ASSISTANTS_MANUAL_HINT: "Pour un autre assistant compatible MCP, ajoutez ce serveur à sa configuration :",
+  ASSISTANTS_COPY: "Copier",
+  ASSISTANTS_COPIED: "Copié",
+  ASSISTANTS_NOT_JSON: "La configuration de {{assistant}} contient des commentaires : ajoutez Kynoko à la main (configuration manuelle ci-dessous).",
+  ASSISTANTS_FAILED: "Impossible de modifier la configuration : {{error}}",
 };
 
 const EN: Dict = {
@@ -158,6 +170,17 @@ const EN: Dict = {
   WELCOME_WINDOWS: "The ticked apps are added to \"Open with\" for their file types, then Windows lets you choose the default program for each type. You can undo this at any time, app by app.",
   WELCOME_ASSOCIATE: "Associate",
   WELCOME_LATER: "Later",
+  ASSISTANTS_TITLE: "AI assistants",
+  ASSISTANTS_LEAD: "An assistant installed on this computer (Claude, Qwen, Codex...) can use the Kynoko apps to create and change your documents. It asks your permission in each app, and you can stop it at any time.",
+  ASSISTANTS_NONE: "No assistant recognised on this computer: set yours up by hand below.",
+  ASSISTANTS_RESTART: "Restart the assistant so that it sees Kynoko.",
+  ASSISTANTS_ONLINE: "Assistants connected right now: {{n}}",
+  ASSISTANTS_MANUAL: "Manual setup",
+  ASSISTANTS_MANUAL_HINT: "For another MCP assistant, add this server to its configuration:",
+  ASSISTANTS_COPY: "Copy",
+  ASSISTANTS_COPIED: "Copied",
+  ASSISTANTS_NOT_JSON: "The configuration of {{assistant}} holds comments: add Kynoko by hand (manual setup below).",
+  ASSISTANTS_FAILED: "The configuration could not be changed: {{error}}",
 };
 
 const ES: Dict = {
@@ -232,6 +255,17 @@ const ES: Dict = {
   WELCOME_WINDOWS: "Las apps marcadas se añaden a «Abrir con» para sus tipos de archivo y, después, Windows le deja elegir el programa predeterminado de cada tipo. Puede deshacerlo en cualquier momento, app por app.",
   WELCOME_ASSOCIATE: "Asociar",
   WELCOME_LATER: "Más tarde",
+  ASSISTANTS_TITLE: "Asistentes de IA",
+  ASSISTANTS_LEAD: "Un asistente instalado en este equipo (Claude, Qwen, Codex...) puede usar las apps de Kynoko para crear y modificar tus documentos. Te pide permiso en cada app y puedes detenerlo en cualquier momento.",
+  ASSISTANTS_NONE: "No se reconoce ningún asistente en este equipo: configura el tuyo a mano aquí abajo.",
+  ASSISTANTS_RESTART: "Reinicia el asistente para que vea Kynoko.",
+  ASSISTANTS_ONLINE: "Asistentes conectados ahora: {{n}}",
+  ASSISTANTS_MANUAL: "Configuración manual",
+  ASSISTANTS_MANUAL_HINT: "Para otro asistente compatible con MCP, añade este servidor a su configuración:",
+  ASSISTANTS_COPY: "Copiar",
+  ASSISTANTS_COPIED: "Copiado",
+  ASSISTANTS_NOT_JSON: "La configuración de {{assistant}} contiene comentarios: añade Kynoko a mano (configuración manual aquí abajo).",
+  ASSISTANTS_FAILED: "No se pudo cambiar la configuración: {{error}}",
 };
 
 const JA: Dict = {
@@ -306,6 +340,17 @@ const JA: Dict = {
   WELCOME_WINDOWS: "チェックしたアプリが、そのファイルの種類の「プログラムから開く」に追加されます。その後、種類ごとの既定のプログラムは Windows で選べます。いつでもアプリごとに元に戻せます。",
   WELCOME_ASSOCIATE: "関連付ける",
   WELCOME_LATER: "後で",
+  ASSISTANTS_TITLE: "AIアシスタント",
+  ASSISTANTS_LEAD: "このコンピューターにインストールされたアシスタント（Claude、Qwen、Codexなど）は、Kynokoのアプリを使って文書を作成・編集できます。アプリごとに許可を求め、いつでも停止できます。",
+  ASSISTANTS_NONE: "このコンピューターでは対応するアシスタントが見つかりません。下で手動で設定してください。",
+  ASSISTANTS_RESTART: "Kynokoを認識させるには、アシスタントを再起動してください。",
+  ASSISTANTS_ONLINE: "現在接続中のアシスタント：{{n}}",
+  ASSISTANTS_MANUAL: "手動設定",
+  ASSISTANTS_MANUAL_HINT: "その他のMCP対応アシスタントには、このサーバーを設定に追加してください：",
+  ASSISTANTS_COPY: "コピー",
+  ASSISTANTS_COPIED: "コピーしました",
+  ASSISTANTS_NOT_JSON: "{{assistant}}の設定にはコメントが含まれています。Kynokoを手動で追加してください（下の手動設定）。",
+  ASSISTANTS_FAILED: "設定を変更できませんでした：{{error}}",
 };
 
 const ZH_HANS: Dict = {
@@ -380,6 +425,17 @@ const ZH_HANS: Dict = {
   WELCOME_WINDOWS: "勾选的应用会加入其文件类型的“打开方式”，之后 Windows 会让您为每种类型选择默认程序。您随时可以逐个应用撤销。",
   WELCOME_ASSOCIATE: "关联",
   WELCOME_LATER: "以后再说",
+  ASSISTANTS_TITLE: "AI 助手",
+  ASSISTANTS_LEAD: "安装在这台电脑上的助手（Claude、Qwen、Codex 等）可以使用 Kynoko 应用创建和修改文档。它会在每个应用中请求许可，并可随时停止。",
+  ASSISTANTS_NONE: "在这台电脑上没有识别到助手，请在下方手动配置。",
+  ASSISTANTS_RESTART: "请重启助手，使其识别 Kynoko。",
+  ASSISTANTS_ONLINE: "当前已连接的助手：{{n}}",
+  ASSISTANTS_MANUAL: "手动配置",
+  ASSISTANTS_MANUAL_HINT: "对于其他支持 MCP 的助手，请将此服务器添加到其配置中：",
+  ASSISTANTS_COPY: "复制",
+  ASSISTANTS_COPIED: "已复制",
+  ASSISTANTS_NOT_JSON: "{{assistant}} 的配置中含有注释，请手动添加 Kynoko（见下方手动配置）。",
+  ASSISTANTS_FAILED: "无法修改配置：{{error}}",
 };
 
 const ZH_HANT: Dict = {
@@ -454,6 +510,17 @@ const ZH_HANT: Dict = {
   WELCOME_WINDOWS: "勾選的應用程式會加入其檔案類型的「開啟檔案」，之後 Windows 會讓您為每種類型選擇預設程式。您隨時可以逐一應用程式復原。",
   WELCOME_ASSOCIATE: "關聯",
   WELCOME_LATER: "稍後再說",
+  ASSISTANTS_TITLE: "AI 助理",
+  ASSISTANTS_LEAD: "安裝在這台電腦上的助理（Claude、Qwen、Codex 等）可以使用 Kynoko 應用程式建立和修改文件。它會在每個應用程式中請求許可，並可隨時停止。",
+  ASSISTANTS_NONE: "在這台電腦上沒有辨識到助理，請在下方手動設定。",
+  ASSISTANTS_RESTART: "請重新啟動助理，讓它辨識 Kynoko。",
+  ASSISTANTS_ONLINE: "目前已連線的助理：{{n}}",
+  ASSISTANTS_MANUAL: "手動設定",
+  ASSISTANTS_MANUAL_HINT: "對於其他支援 MCP 的助理，請將此伺服器加入其設定：",
+  ASSISTANTS_COPY: "複製",
+  ASSISTANTS_COPIED: "已複製",
+  ASSISTANTS_NOT_JSON: "{{assistant}} 的設定中含有註解，請手動加入 Kynoko（見下方手動設定）。",
+  ASSISTANTS_FAILED: "無法修改設定：{{error}}",
 };
 
 const AR: Dict = {
@@ -528,6 +595,17 @@ const AR: Dict = {
   WELCOME_WINDOWS: "تُضاف التطبيقات المحددة إلى «فتح باستخدام» لأنواع ملفاتها، ثم يتيح لك Windows اختيار البرنامج الافتراضي لكل نوع. يمكنك التراجع في أي وقت، تطبيقًا تطبيقًا.",
   WELCOME_ASSOCIATE: "ربط",
   WELCOME_LATER: "لاحقًا",
+  ASSISTANTS_TITLE: "مساعدو الذكاء الاصطناعي",
+  ASSISTANTS_LEAD: "يمكن لمساعد مثبّت على هذا الحاسوب (Claude أو Qwen أو Codex...) استخدام تطبيقات Kynoko لإنشاء المستندات وتعديلها. يطلب الإذن في كل تطبيق، ويمكن إيقافه في أي وقت.",
+  ASSISTANTS_NONE: "لم يُتعرّف على أي مساعد على هذا الحاسوب: يمكن إعداده يدويًا أدناه.",
+  ASSISTANTS_RESTART: "يلزم إعادة تشغيل المساعد ليتعرّف على Kynoko.",
+  ASSISTANTS_ONLINE: "المساعدون المتصلون الآن: {{n}}",
+  ASSISTANTS_MANUAL: "الإعداد اليدوي",
+  ASSISTANTS_MANUAL_HINT: "لمساعد آخر متوافق مع MCP، تُضاف هذه الخدمة إلى إعداداته:",
+  ASSISTANTS_COPY: "نسخ",
+  ASSISTANTS_COPIED: "تم النسخ",
+  ASSISTANTS_NOT_JSON: "تحتوي إعدادات {{assistant}} على تعليقات: يلزم إضافة Kynoko يدويًا (الإعداد اليدوي أدناه).",
+  ASSISTANTS_FAILED: "تعذّر تعديل الإعدادات: {{error}}",
 };
 
 const DICTS: Record<Lang, Dict> = { fr: FR, en: EN, es: ES, ja: JA, 'zh-Hans': ZH_HANS, 'zh-Hant': ZH_HANT, ar: AR };

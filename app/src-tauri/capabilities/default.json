@@ -25,6 +25,7 @@
     "allow-open-download",
     "allow-update-download",
     "allow-update-install",
-    "allow-update-cancel"
+    "allow-update-cancel",
+    "allow-set-assistant"
   ]
 }

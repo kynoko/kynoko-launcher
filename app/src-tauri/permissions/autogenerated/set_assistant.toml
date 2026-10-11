@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-assistant"
+description = "Enables the set_assistant command without any pre-configured scope."
+commands.allow = ["set_assistant"]
+
+[[permission]]
+identifier = "deny-set-assistant"
+description = "Denies the set_assistant command without any pre-configured scope."
+commands.deny = ["set_assistant"]

@@ -29,6 +29,7 @@ Contents:
 16. Open questions
 17. Phases
 18. Decision log
+19. Assistants (MCP): normative protocol
 
 ---
 
@@ -763,25 +764,13 @@ catalogue in the system's language, falling back to English.
    /api/public/launcher-catalogue/`, decision of 2026-09-26).
 6. **Linux sandboxed browsers** (Flatpak, Snap): loopback reachable, launching
    with a profile.
-7. **A local MCP server** (proposed 2026-10-11, nothing built): assistants
-   installed on the computer (Claude Desktop, Codex, Qwen Code, Mistral Vibe
-   Code, LM Studio, Jan) calling the Kynoko apps to create and change files,
-   for free. The agent would speak MCP over stdio (`kynoko-launcher mcp`,
-   relaying to the running agent through a named pipe or a Unix socket) and,
-   off by default, over HTTP on `127.0.0.1` with a token and an `Origin`
-   check. It relays each call to the app's page, which runs it with its own
-   engine and history: a Tauri channel for a Kynoko window (two commands of
-   the "kynoko-window" capability, never an `eval` of a string), a loopback
-   WebSocket for a browser, announced by a `#kynokoAutomation=` fragment as
-   the bridge does. A hidden Kynoko window would be the headless engine.
-   Needs: the resident mode and its tray icon (section 3), a "Connect an
-   assistant" window that writes the assistants' configuration (inventoried,
-   so removed on uninstall), an `.mcpb` bundle for Claude Desktop. An
-   assistant may name a path, unlike a page: only for the apps' file types
-   and in the folders the user allowed, and the page still receives a token,
-   never the path. The protocol code would be a crate shared with Kynoko's
-   remote gateway, which serves the assistants that only accept remote
-   servers (ChatGPT, Mistral Vibe Work).
+7. ~~A local MCP server~~ built (2026-10-11): see section 19. Still open
+   there: a tray icon while an assistant is connected, an `.mcpb` bundle for
+   Claude Desktop, files named by an assistant (a path, only for the apps'
+   file types and in folders the user allowed; the page still receives a
+   token, never the path), and sharing the protocol code with Kynoko's remote
+   gateway, which serves the assistants that only accept remote servers
+   (ChatGPT, Mistral Vibe Work).
 
 ## 17. Phases
 
@@ -836,4 +825,119 @@ catalogue in the system's language, falling back to English.
 | 2026-10-09 | First start, asked for by the user after a first try on Ubuntu and Mint ("no app in the menu, nothing associated"; nothing was, by design, until each app was switched on): every app gets its shortcuts at once, and the window asks once whether the apps open the user's files (all ticked, the types in view, "Associate" or "Later"), rather than taking the types over silently: on Linux and macOS that answer makes them the default. A launcher already set up by hand is left as it is. The AppImage installs itself (a copy in `~/.local/share/kynoko-launcher`, its own menu entry), which also gives it a place in the menu; the `.deb` and `.rpm` have theirs already. |
 | 2026-10-09 | Asked for by the user: what is recommended is also the default for opening. An app met for the first time whose followed browser it does not recommend gets the first installed one it does (section 5): Office the Kynoko window, Media Studio, Photo Studio, PDF Editor and Games a Chromium browser when the system's is Firefox, QR Code Studio left on Firefox (it recommends both). Linux now knows the system's browser (`xdg-settings`, `xdg-mime`), which the window also shows. |
 | 2026-10-11 | The specification says what was built: the agent never had the tray / menu-bar icon section 3 planned, so a bridge session ends with its page or after 10 min without heartbeat, never from a tray. Such an icon comes with a resident mode, when a feature needs the agent to stay up. Status line and phases brought up to date. |
+| 2026-10-11 | AI assistants installed on the computer use the Kynoko apps over MCP (section 19): `kynoko-launcher mcp` is a pipe between the assistant's standard input and output and the agent, which it starts when none runs; the agent answers the protocol (dual era, 2026-07-28 and the handshake versions before it) with the tools each app declares in its manifest, and relays each call to a window of the app it opens for the assistant, in the app's browser, at a `#kynokoAutomation=` fragment; the page asks its user first, runs the call in its own engine and history, and its Stop keeps the assistant out of the app for 10 minutes. One loopback WebSocket listener for pages and assistants alike, guarded like the bridge (exact Host, exact Origin for a page, a token in the state folder and no Origin for an assistant). The window's "AI assistants" switches add Kynoko to the configuration of Claude Desktop, LM Studio, Cursor, Qwen Code, VS Code and Codex (only our entry, the rest kept, a file with comments left alone, a copy kept aside), inventoried, so removed on reset and uninstall. No tray icon yet; one loopback WebSocket rather than a Tauri channel for the Kynoko window too. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
+
+## 19. Assistants (MCP): normative protocol
+
+An AI assistant installed on the computer (Claude Desktop, Codex, Qwen Code,
+Mistral Vibe Code, LM Studio, Jan, VS Code, Cursor) uses the Kynoko apps
+through the Model Context Protocol: it creates and changes documents with
+the app's own engine, in a window the user sees. The apps' side is the
+skeleton's (`provideKynokoAutomation`); this section is the launcher's.
+
+### Processes
+
+- `kynoko-launcher mcp` is what an assistant starts. It runs before
+  anything else, without Tauri (no window, no single-instance hand-over), and
+  is a pipe: each line on its standard input goes, as it is, to the agent
+  over the loopback, each answer comes back as a line on its standard
+  output. What goes wrong is said on standard error.
+- Where the agent listens is in the state folder, `automation.json`
+  (`{ "port", "token" }`), rewritten at each start of the relay, readable by
+  the user only (0600 on Unix; the state folder is the user's own on
+  Windows). No answer there: the pipe starts `kynoko-launcher agent`, apart
+  from itself (detached, out of the assistant's job when it allows it), and
+  waits up to 25 s for it. A running launcher gets `agent` through its
+  single-instance hand-over and starts its relay.
+- The agent stays up while an assistant is connected or a page works for
+  one, on top of the idle rules of section 3.
+
+### The listener
+
+One WebSocket listener on `127.0.0.1`, a free port, for assistants and pages
+alike. Every handshake must carry `Host: 127.0.0.1:<port>` exactly (421
+otherwise: DNS rebinding).
+
+- `/c/<token>`: an assistant. The token of `automation.json`, compared in
+  constant time, and NO `Origin` header (403 otherwise): a web page always
+  sends one, so no page can pose as an assistant.
+- `/a/<token>`: a page. 256 random bits minted for ONE page of ONE app,
+  good only for the origin of that app's address (exact `Origin`, 403
+  otherwise; unknown token: 404). Forgotten 5 minutes after it was made if
+  the page never came, 10 minutes after it left.
+
+### MCP
+
+Dual era (MCP 2026-07-28, "Versioning and Compatibility"): `initialize`
+selects a handshake version (2024-11-05 to 2025-11-25; an unknown one gets
+the latest of them); a request carrying `_meta`
+`io.modelcontextprotocol/protocolVersion` is served statelessly
+(`server/discover`, `resultType`, `ttlMs` and `cacheScope` on lists), and an
+unsupported modern version gets `-32022` with the supported list. Tools only.
+The assistant's name (`clientInfo`) is shown by the pages.
+
+The tools:
+
+- `kynoko_apps` (read): the apps an assistant can use, their tools, whether
+  a window is open for it; `kynoko_open` (`app`, `facade`): opens one.
+- Each app's own: the `automation` block of the app's manifest,
+  `<app address>/assets/kynoko-app.json` (written at build time from the
+  app's `core/automation.json`): `{ v: 1, prefix, tools: [{ name, title?,
+  description, input, effect, facade? }] }`. Read from every live app of the
+  catalogue at once, kept 5 minutes, the last good copy of each app kept in
+  `automation-tools.json` for when it cannot be reached. Checked: a prefix of
+  2 to 16 lowercase letters or digits, never `kynoko`, unique (first app
+  wins); names `<prefix>_...`, unique; an object schema; `effect` among
+  `read`, `write`, `destructive`, which become `readOnlyHint` and
+  `destructiveHint`. A result passes text and pictures only.
+
+A call to an app's tool goes to the window of that app that connected last;
+none: one is opened (below) and the call waits up to 2 minutes for the user
+to allow the assistant there, then up to 3 minutes for the answer. A tool
+call runs on its own thread: the assistant's other messages go on.
+
+### The page
+
+The window is opened like a file's (section 8): in the app's browser, at
+`<app address>/<facade>#kynokoAutomation=127.0.0.1:<port>/<token>&kynokoLauncher=1`
+(an ordinary Firefox window until that profile was seen reaching the
+launcher). The page asks its user whether the assistant may work there, then
+connects to `/a/<token>`. Messages, one JSON object each, protocol 1:
+
+| From | Message | Meaning |
+|---|---|---|
+| launcher | `{ type: "welcome", protocol, client? }` | at connection; `client`: the assistant's name |
+| launcher | `{ type: "client", client? }` | the assistant connected or left |
+| launcher | `{ type: "call", id, tool, args }` | run a tool |
+| page | `{ type: "hello", protocol, app, tools }` | who it is: another app or protocol is let go (4403, 4426) |
+| page | `{ type: "result", id, result }` | MCP's own result shape (`content`, `structuredContent?`, `isError?`) |
+| page | `{ type: "error", id, code, message }` | why it could not; said to the assistant |
+| page | `{ type: "bye", reason: "stopped" }` | the user pressed Stop: calls to that app are refused for 10 minutes |
+
+Only the page a call was sent to may answer it. A page that leaves fails its
+calls at once.
+
+### The assistants' configuration
+
+The window's "AI assistants" section shows the assistants the launcher
+recognises on the computer, one switch each, which adds or removes ONE
+entry, `kynoko` (`{ "command": "<launcher>", "args": ["mcp"] }`):
+
+| Assistant | File |
+|---|---|
+| Claude Desktop | `<config dir>/Claude/claude_desktop_config.json`, `mcpServers` |
+| LM Studio | `~/.lmstudio/mcp.json`, `mcpServers` |
+| Cursor | `~/.cursor/mcp.json`, `mcpServers` |
+| Qwen Code | `~/.qwen/settings.json`, `mcpServers` |
+| VS Code | `<config dir>/Code/User/mcp.json`, `servers` (`type: "stdio"`) |
+| Codex | `~/.codex/config.toml`, `[mcp_servers.kynoko]` |
+
+The rest of the file is kept as it is, key order included; a file that is
+not plain JSON (comments) is left alone and the window says to add Kynoko by
+hand, with what to add (also offered for any other assistant). Before the
+first change, the file as it was is copied beside it
+(`<file>.kynoko-backup`). Each entry is in the inventory
+(`assistantEntry`): "Reset everything" and the uninstaller take it out. An
+isolated run (`KYNOKO_LAUNCHER_HOME`) works in `<home>/home` and never in the
+user's files.

@@ -30,8 +30,9 @@ fn mimeapps() -> PathBuf {
 
 /// The program to register: the AppImage file itself when run from one (the
 /// running binary lives in a mount that disappears when it exits), its
-/// installed copy once there is one (see install_self).
-fn exe() -> String {
+/// installed copy once there is one (see install_self). Also what an AI
+/// assistant is told to start (assistants.rs).
+pub(crate) fn exe() -> String {
     match appimage() {
         Some(running) => appimage_target(&running).to_string_lossy().into_owned(),
         None => std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),

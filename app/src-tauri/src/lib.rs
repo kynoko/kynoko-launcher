@@ -13,7 +13,9 @@
 //! instance), so one AGENT owns the bridge. The agent lives while files are
 //! open and quits by itself once none is and no window is shown.
 
+mod assistants;
 mod assoc;
+mod automation;
 mod bridge;
 mod browsers;
 mod catalogue;
@@ -21,6 +23,8 @@ mod dialog;
 mod fonts;
 mod handoff;
 mod launch;
+mod mcp;
+mod mcp_stdio;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -83,6 +87,9 @@ enum Command {
     /// Takes away everything written to the system; `--keep-preferences`
     /// leaves the user's choices, which a reinstall then applies again.
     Cleanup { keep_preferences: bool },
+    /// Assistants: the relay `kynoko-launcher mcp` talks to (automation.rs),
+    /// started by it when no launcher runs; no window.
+    Agent,
 }
 
 fn parse(args: &[String]) -> Command {
@@ -93,6 +100,7 @@ fn parse(args: &[String]) -> Command {
         },
         Some("launch") => Command::Launch(args.get(1).cloned().unwrap_or_default()),
         Some("cleanup") => Command::Cleanup { keep_preferences: args.get(1).is_some_and(|a| a == "--keep-preferences") },
+        Some("agent") => Command::Agent,
         Some(url) if url.starts_with(&format!("{}:", assoc::SCHEME)) => Command::Window(app_param(url)),
         _ => Command::Window(None),
     }
@@ -122,6 +130,8 @@ struct Shared {
     last_manual_check: Mutex<Option<Instant>>,
     bridge: Mutex<Option<Bridge>>,
     handoff: Mutex<Option<Handoff>>,
+    /// Assistants: the relay to the app pages, started on demand.
+    automation: Mutex<Option<automation::Automation>>,
     /// When a Kynoko window was last seen open or closed (see FLUSH_GRACE).
     last_app_window: Mutex<Option<Instant>>,
     /// Per Kynoko window: when its page last started loading, and when a
@@ -165,6 +175,44 @@ impl Shared {
             *slot = Some(bridge.map_err(|e| e.to_string())?);
         }
         Ok(slot.clone().expect("started"))
+    }
+
+    /// The assistants' relay (started once), and where it listens written
+    /// down for `kynoko-launcher mcp`.
+    fn automation(&self) -> Result<automation::Automation, String> {
+        let mut slot = self.automation.lock().expect("automation lock");
+        if let Some(a) = slot.as_ref() {
+            return Ok(a.clone());
+        }
+        let handle = self.handle.get().cloned().ok_or("the launcher is not started yet")?;
+        let apps_handle = handle.clone();
+        let open_handle = handle.clone();
+        let host = mcp::Host {
+            apps: Box::new(move || {
+                let shared = apps_handle.state::<Shared>();
+                let settings = Settings::load();
+                let lang = settings.ui_lang.clone().unwrap_or_else(|| "en".into());
+                shared
+                    .catalogue()
+                    .apps
+                    .iter()
+                    .filter(|a| a.status == "live")
+                    .map(|a| mcp::AppInfo { code: a.code.clone(), name: a.display_name(&lang), url: settings.url_of(a) })
+                    .collect()
+            }),
+            open: Box::new(move |automation, code, facade| {
+                let shared = open_handle.state::<Shared>();
+                open_for_assistant(&shared, automation, code, facade)
+            }),
+            version: handle.package_info().version.to_string(),
+        };
+        let protocol = mcp::Mcp::new(host);
+        let on_client: automation::OnClient = std::sync::Arc::new(move |automation, client, text, out| protocol.handle(automation, client, text, out));
+        let started = automation::Automation::start(on_client).map_err(|e| e.to_string())?;
+        mcp_stdio::write_state(&mcp_stdio::State { port: started.port(), token: started.client_token().to_string() })
+            .map_err(|e| format!("cannot write {}: {e}", mcp_stdio::STATE_FILE))?;
+        *slot = Some(started.clone());
+        Ok(started)
     }
 
     /// The hand-off listener for the gateway at `origin` (started once).
@@ -238,6 +286,25 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
     let (browser, profile) = browser_for(&settings, code);
     open_page(shared, &settings, app, browser, profile, &url, false)
+}
+
+/// Opens a window of the app `code` for an assistant, at `facade`: in the
+/// app's browser, at `#kynokoAutomation=127.0.0.1:<port>/<token>`, the way a
+/// file is handed over. The page asks its user, then connects (automation.rs).
+fn open_for_assistant(shared: &Shared, automation: &automation::Automation, code: &str, facade: Option<&str>) -> Result<String, String> {
+    let catalogue = shared.catalogue();
+    let app = catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
+    let settings = Settings::load();
+    let base = app_url(&settings, app);
+    let token = automation.new_page(&app.code, &origin_of(&base));
+    let path = facade.unwrap_or("").trim_matches('/');
+    let url = format!("{}/{}#kynokoAutomation=127.0.0.1:{}/{}&{MARKER}", base.trim_end_matches('/'), path, automation.port(), token);
+    let (browser, profile) = browser_for(&settings, &app.code);
+    // As for a file: in Firefox, an ordinary window until this profile has
+    // been seen reaching the launcher, so that its permission prompt shows.
+    open_page(shared, &settings, app, browser, profile, &url, true)?;
+    *shared.last_open.lock().expect("lock") = Some(Instant::now());
+    Ok(token)
 }
 
 /// The browser and profile `code` opens in: the one chosen for it, else the
@@ -689,6 +756,11 @@ fn dispatch(app: &AppHandle, command: Command) {
         }
         Command::Open(named, files) => open_files(&shared, named.as_deref(), &files),
         Command::Launch(target) => launch_app(&shared, &target),
+        Command::Agent => {
+            // The assistant's pipe connects within seconds: stay up meanwhile.
+            *shared.last_open.lock().expect("lock") = Some(Instant::now());
+            shared.automation().map(|_| ())
+        }
         Command::Cleanup { keep_preferences } => {
             let r = cleanup(keep_preferences);
             // What one runs before deleting the AppImage: its own install goes too.
@@ -723,7 +795,9 @@ fn watch_idle(app: AppHandle) {
         let waiting = shared.last_open.lock().expect("lock").map(|t| t.elapsed() < FIRST_CONTACT).unwrap_or(false);
         // An install under way quits by itself, once the installer is started.
         let installing = shared.update_running.load(std::sync::atomic::Ordering::SeqCst);
-        if !window_shown && live == 0 && !waiting && !installing {
+        // An assistant connected, or a page working for one.
+        let assisting = shared.automation.lock().expect("automation lock").as_ref().is_some_and(|a| a.busy());
+        if !window_shown && live == 0 && !waiting && !installing && !assisting {
             app.exit(0);
             return;
         }
@@ -783,6 +857,12 @@ struct StateView {
     focus: Option<String>,
     /// The first start's question: should the apps open the user's files?
     ask_associations: bool,
+    /// AI assistants: those the launcher knows, and whether they know Kynoko.
+    assistants: Vec<assistants::AssistantView>,
+    /// What to add by hand to another assistant's configuration.
+    assistant_snippet: String,
+    /// Assistants connected right now (kynoko-launcher mcp).
+    assistants_online: usize,
 }
 
 #[derive(Serialize)]
@@ -884,6 +964,20 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         os: std::env::consts::OS.to_string(),
         focus: shared.focus.lock().expect("lock").take(),
         ask_associations: settings.ask_associations,
+        assistants: assistants::views(),
+        assistant_snippet: assistants::snippet(),
+        assistants_online: shared.automation.lock().expect("automation lock").as_ref().map(|a| a.clients()).unwrap_or(0),
+    }
+}
+
+/// Puts Kynoko in an AI assistant's configuration, or takes it out.
+#[tauri::command]
+fn set_assistant(id: String, on: bool) -> Result<(), String> {
+    let mut inventory = Inventory::load();
+    if on {
+        assistants::connect(&id, &mut inventory)
+    } else {
+        assistants::disconnect(&id, &mut inventory)
     }
 }
 
@@ -1538,6 +1632,11 @@ fn opened(app: &AppHandle, urls: &[tauri::Url]) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // An assistant's MCP server (mcp_stdio.rs): a pipe to the agent, before
+    // anything else, without Tauri.
+    if std::env::args().nth(1).as_deref() == Some("mcp") {
+        std::process::exit(mcp_stdio::run());
+    }
     // Windows only lets the program the user just started bring a window to
     // the front. A double-clicked file starts THIS instance, which hands the
     // file to the launcher already running: lend it that right first, or the
@@ -1575,6 +1674,7 @@ pub fn run() {
             last_manual_check: Mutex::new(None),
             bridge: Mutex::new(None),
             handoff: Mutex::new(None),
+            automation: Mutex::new(None),
             last_app_window: Mutex::new(None),
             page_loads: Mutex::new(std::collections::HashMap::new()),
             title_bar_claims: Mutex::new(std::collections::HashMap::new()),
@@ -1619,7 +1719,8 @@ pub fn run() {
             open_download,
             update_download,
             update_install,
-            update_cancel
+            update_cancel,
+            set_assistant
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

@@ -87,6 +87,9 @@ pub enum Artefact {
     /// A default handler we set (Linux mimeapps.list), and the one it
     /// replaced: restored on removal, unless the user changed it since.
     MimeDefault { mime: String, desktop: String, previous: Option<String> },
+    /// Our entry in an AI assistant's MCP configuration (assistants.rs):
+    /// removed alone, the rest of the file kept.
+    AssistantEntry { path: String, client: String },
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -117,6 +120,15 @@ fn read<T: for<'de> Deserialize<'de> + Default>(name: &str) -> T {
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
+}
+
+/// Another state file of the launcher's folder (assistants: automation.rs).
+pub fn read_named<T: for<'de> Deserialize<'de> + Default>(name: &str) -> T {
+    read(name)
+}
+
+pub fn write_named<T: Serialize>(name: &str, value: &T) -> std::io::Result<()> {
+    write(name, value)
 }
 
 fn write<T: Serialize>(name: &str, value: &T) -> std::io::Result<()> {

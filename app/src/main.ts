@@ -34,7 +34,14 @@ interface State {
   focus: string | null;
   /** The first start's question about the files is still to be answered. */
   askAssociations: boolean;
+  /** AI assistants the launcher knows, and whether Kynoko is in their configuration. */
+  assistants: AssistantView[];
+  /** What to add by hand to another assistant's configuration. */
+  assistantSnippet: string;
+  /** Assistants connected right now. */
+  assistantsOnline: number;
 }
+interface AssistantView { id: string; name: string; installed: boolean; connected: boolean }
 
 const lang: Lang = pickLang(navigator.languages);
 document.documentElement.lang = lang;
@@ -409,6 +416,52 @@ async function startInstall(): Promise<void> {
   await render();
 }
 
+/** What the last change to an assistant's configuration calls for (restart it, add Kynoko by hand). */
+let assistantNote: string | null = null;
+
+/**
+ * The AI assistants installed on this computer that may use the apps (MCP):
+ * one switch each puts Kynoko in its configuration or takes it out; any
+ * other assistant gets what to add by hand.
+ */
+function assistantsOf(state: State): HTMLElement {
+  const section = el('section', { class: 'assistants' });
+  section.append(el('h2', {}, t(lang, 'ASSISTANTS_TITLE')), el('p', { class: 'note' }, t(lang, 'ASSISTANTS_LEAD')));
+  const shown = state.assistants.filter((a) => a.installed || a.connected);
+  if (shown.length) {
+    const list = el('div', { class: 'assistant-list' });
+    for (const a of shown) {
+      list.append(switchOf(a.connected, a.name, (on) => void run(async () => {
+        try {
+          await invoke('set_assistant', { id: a.id, on });
+          assistantNote = on ? t(lang, 'ASSISTANTS_RESTART') : null;
+        } catch (e) {
+          assistantNote = String(e).includes('NOT_PLAIN_JSON')
+            ? t(lang, 'ASSISTANTS_NOT_JSON', { assistant: a.name })
+            : t(lang, 'ASSISTANTS_FAILED', { error: String(e) });
+        }
+      })));
+    }
+    section.append(list);
+  } else {
+    section.append(el('p', { class: 'note' }, t(lang, 'ASSISTANTS_NONE')));
+  }
+  if (assistantNote) section.append(el('p', { class: 'note', role: 'status' }, assistantNote));
+  if (state.assistantsOnline > 0) section.append(el('p', { class: 'note' }, t(lang, 'ASSISTANTS_ONLINE', { n: String(state.assistantsOnline) })));
+  // A path and JSON: read left to right in every language.
+  const snippet = el('pre', { class: 'snippet', dir: 'ltr' }, state.assistantSnippet);
+  const copy = el('button', { type: 'button' }, t(lang, 'ASSISTANTS_COPY'));
+  copy.addEventListener('click', () => {
+    void navigator.clipboard.writeText(state.assistantSnippet).then(() => { copy.textContent = t(lang, 'ASSISTANTS_COPIED'); });
+  });
+  section.append(el('details', { class: 'manual' },
+    el('summary', {}, t(lang, 'ASSISTANTS_MANUAL')),
+    el('p', { class: 'note' }, t(lang, 'ASSISTANTS_MANUAL_HINT')),
+    snippet,
+    copy));
+  return section;
+}
+
 async function run(action: () => Promise<unknown>): Promise<void> {
   try {
     await action();
@@ -522,6 +575,8 @@ async function render(): Promise<void> {
     settings.addEventListener('click', () => void run(() => invoke('open_default_apps')));
     root.append(note, el('p', {}, settings));
   }
+
+  root.append(assistantsOf(state));
 
   const remove = el('button', { type: 'button', class: 'danger' }, t(lang, 'REMOVE_ALL'));
   remove.addEventListener('click', () => {

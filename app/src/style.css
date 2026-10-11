@@ -278,3 +278,15 @@ label.welcome-app span { font-weight: 600; }
 label.welcome-app small { grid-column: 2; color: var(--kynoko-hint); font-size: 0.8rem; overflow-wrap: anywhere; }
 label.welcome-app:has(input:not(:checked)) span { color: var(--kynoko-hint); }
 .welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* AI assistants (main.ts, assistantsOf): one switch per assistant found,
+   then what to add by hand to any other. */
+.assistant-list { display: grid; gap: 10px; margin-block: 12px 4px; }
+.assistants details.manual { margin-block-start: 12px; }
+.assistants details.manual summary { cursor: pointer; font-weight: 600; }
+.assistants pre.snippet {
+  margin-block: 8px; padding: 10px 12px; overflow-x: auto;
+  font-size: 0.8rem; line-height: 1.4; text-align: start;
+  background: var(--kynoko-surface-sunken, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--kynoko-hairline); border-radius: 12px 3px;
+}

@@ -24,6 +24,7 @@ fn main() {
         "update_download",
         "update_install",
         "update_cancel",
+        "set_assistant",
         "own_window_drag",
         "own_window_minimize",
         "own_window_toggle_maximize",
