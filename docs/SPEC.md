@@ -884,7 +884,8 @@ The tools:
 - Each app's own: the `automation` block of the app's manifest,
   `<app address>/assets/kynoko-app.json` (written at build time from the
   app's `core/automation.json`): `{ v: 1, prefix, tools: [{ name, title?,
-  description, input, effect, facade? }] }`. Read from every live app of the
+  description, input, effect, facade?, facadeFrom? }] }`; `facadeFrom` names
+  the argument that chooses the facade (Layout Studio's product). Read from every live app of the
   catalogue at once, kept 5 minutes, the last good copy of each app kept in
   `automation-tools.json` for when it cannot be reached. Checked: a prefix of
   2 to 16 lowercase letters or digits, never `kynoko`, unique (first app
