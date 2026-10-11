@@ -71,6 +71,8 @@ pub struct ToolDef {
     pub input: Value,
     pub effect: String,
     pub facade: Option<String>,
+    /// The argument that names the facade, when the assistant chooses it.
+    pub facade_from: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -277,7 +279,16 @@ calling an app's tool opens the app by itself.",
             }
             _ => {
                 let Some((app, tool)) = self.find(name) else { return failure(&format!("Unknown tool {name}.")) };
-                let token = match self.window(automation, &app, tool.facade.as_deref(), false) {
+                // The facade an argument names (a product), else the tool's own.
+                let chosen = tool
+                    .facade_from
+                    .as_ref()
+                    .and_then(|key| args.get(key))
+                    .and_then(Value::as_str)
+                    .filter(|f| !f.is_empty() && f.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '/'))
+                    .map(str::to_string);
+                let facade = chosen.or_else(|| tool.facade.clone());
+                let token = match self.window(automation, &app, facade.as_deref(), false) {
                     Ok(token) => token,
                     Err(message) => return failure(&message),
                 };
@@ -412,6 +423,7 @@ pub fn parse_declaration(app: &AppInfo, decl: &Value) -> Option<AppTools> {
                 input,
                 effect,
                 facade: t.get("facade").and_then(Value::as_str).map(str::to_string),
+                facade_from: t.get("facadeFrom").and_then(Value::as_str).map(str::to_string),
             })
         })
         .collect();
