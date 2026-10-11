@@ -759,9 +759,29 @@ catalogue in the system's language, falling back to English.
 4. **Chromium installed PWAs**: can Kynoko Launcher launch an installed PWA
    at a given URL (`--app-id` with a URL), or is `--app=<url>` the only
    reliable form?
-5. **Catalogue URL** and generation job on the platform side.
+5. ~~Catalogue URL~~ decided: the platform serves it (`GET
+   /api/public/launcher-catalogue/`, decision of 2026-09-26).
 6. **Linux sandboxed browsers** (Flatpak, Snap): loopback reachable, launching
    with a profile.
+7. **A local MCP server** (proposed 2026-10-11, nothing built): assistants
+   installed on the computer (Claude Desktop, Codex, Qwen Code, Mistral Vibe
+   Code, LM Studio, Jan) calling the Kynoko apps to create and change files,
+   for free. The agent would speak MCP over stdio (`kynoko-launcher mcp`,
+   relaying to the running agent through a named pipe or a Unix socket) and,
+   off by default, over HTTP on `127.0.0.1` with a token and an `Origin`
+   check. It relays each call to the app's page, which runs it with its own
+   engine and history: a Tauri channel for a Kynoko window (two commands of
+   the "kynoko-window" capability, never an `eval` of a string), a loopback
+   WebSocket for a browser, announced by a `#kynokoAutomation=` fragment as
+   the bridge does. A hidden Kynoko window would be the headless engine.
+   Needs: the resident mode and its tray icon (section 3), a "Connect an
+   assistant" window that writes the assistants' configuration (inventoried,
+   so removed on uninstall), an `.mcpb` bundle for Claude Desktop. An
+   assistant may name a path, unlike a page: only for the apps' file types
+   and in the folders the user allowed, and the page still receives a token,
+   never the path. The protocol code would be a crate shared with Kynoko's
+   remote gateway, which serves the assistants that only accept remote
+   servers (ChatGPT, Mistral Vibe Work).
 
 ## 17. Phases
 
