@@ -12,11 +12,10 @@ Windows, macOS and Linux.
 - Removes everything it created when you uninstall it, and restores your
   previous default apps.
 
-Status: **first working build, Windows**. It lists the apps and every
-installed browser, associates an app's file types (and removes them all
-again), opens a double-clicked file in the right app through the loopback
-bridge, and lets the app save it back in place. macOS, Linux, shortcuts and
-the online catalogue come next. Design: [docs/SPEC.md](docs/SPEC.md).
+Status: **released for Windows, macOS and Linux** (v0.2.x, see
+[Releases](https://github.com/kynoko/kynoko-launcher/releases)). Windows has
+been used the most; macOS is built and packaged by the CI, and has been tried
+less than the other two. Design: [docs/SPEC.md](docs/SPEC.md).
 
 ## Build
 
@@ -30,15 +29,18 @@ npx tauri build        # app/src-tauri/target/release/bundle/nsis/*-setup.exe
 npx tauri dev          # run from source
 ```
 
-`tools/build-catalogue.mjs` regenerates the catalogue bundled in the build
-(`app/src-tauri/catalogue.json`) from the apps' own `kynoko-app.json`.
+A release bundles the platform's current catalogue
+(`.github/workflows/release.yml`), and falls back to the committed snapshot
+`app/src-tauri/catalogue.json` when the platform cannot be reached.
+`tools/build-catalogue.mjs` builds such a snapshot from the apps' own
+`kynoko-app.json`.
 
 ## Unsigned builds
 
 Releases are not signed with a paid identity. Your system will warn you the
-first time; the steps to proceed will be documented for each system. Every
-release publishes SHA-256 checksums, and is built by the public GitHub Actions
-workflows of this repository.
+first time; the download window of every Kynoko app gives the steps for
+Windows and macOS. Every release publishes SHA-256 checksums, and is built by
+the public GitHub Actions workflows of this repository.
 
 ## Contributing
 

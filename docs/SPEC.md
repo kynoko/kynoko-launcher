@@ -1,7 +1,8 @@
 # Kynoko Launcher - Specification
 
-Status: **draft for review** (2026-09-25). Nothing here is implemented yet,
-except the loopback bridge spike in `spikes/loopback-bridge/` (phase 0).
+Status: **living specification**. Phases 0 to 3 are released (v0.2.x, see
+section 17); each section describes the released behaviour unless it says
+otherwise, and section 18 records why it changed.
 
 Kynoko Launcher is the desktop entry point to the Kynoko web apps on
 Windows, macOS and Linux. It installs them, gives them shortcuts, opens the
@@ -96,9 +97,13 @@ Non-goals:
   command-line entry points used by associations and shortcuts, and the agent.
   A second invocation hands its arguments to the running instance
   (single-instance), so only one agent owns the bridge.
-- **The agent** runs while at least one session is open, then exits after an
-  idle delay. It shows a tray / menu-bar icon while alive, so the user can see
-  why it runs and close sessions.
+- **The agent** runs while it has something to do, then exits: the settings
+  window shown, a Kynoko window open (and 40 s after the last one closes, the
+  time the web engine takes to write its cookies to disk), a bridge session
+  alive, a file just handed over whose page has not reached the bridge yet
+  (120 s), or an install under way. It has no tray / menu-bar icon: one was
+  planned here and never built. It will come with a resident mode, when a
+  feature needs the agent to stay up.
 - **Window UI**: `@common/kynoko-ui` is a private package and this public
   repository must build on GitHub Actions without private registry
   credentials. So only the **Boréal design tokens** (CSS custom properties:
@@ -384,8 +389,8 @@ Validated in phase 0 with Edge 154 and Firefox 156 (`spikes/loopback-bridge`).
   `sessionStorage`, so a reload still works and the token does not end up in
   history or bookmarks.
 - Several files: one session each, fragment `kynokoBridge=<host>/<t1>,<t2>`.
-- Lifetime: kept alive by a heartbeat every 30 s; closed by the page, by the
-  user from the tray, or after 10 min without heartbeat.
+- Lifetime: kept alive by a heartbeat every 30 s; closed by the page, or
+  after 10 min without heartbeat.
 
 ### Endpoints
 
@@ -763,9 +768,9 @@ catalogue in the system's language, falling back to English.
 | Phase | Content |
 |---|---|
 | 0 - done | Bridge spike: protocol, guards, write back, LNA measured (Edge, Firefox). |
-| 1 | Skeleton: `files` declaration, file source abstraction with `bridge` and `handle`, generic `/open`, save in place, conflict UI, pre-prompt, no `file_handlers`, desktop install invitation. Office, Photo Studio, Media Studio. |
-| 2 | Kynoko Launcher v1: catalogue, browsers and profiles, shortcuts, associations, agent, inventory and cleanup, i18n. **Windows slice done** (2026-09-25): bundled catalogue, browser discovery (every channel), per-app browser, HKCU associations with inventory and complete removal, `open` / `launch` / `cleanup`, single-instance agent with the multi-session bridge (ReplaceFileW), NSIS per-user installer running `cleanup` on uninstall, 7-language window. Verified end to end: associate Office, double-click a .docx, edit, Ctrl+S on disk, remove everything, registry back to its prior state. Next: shortcuts, online catalogue refresh, profiles, macOS, Linux. |
-| 3 | Packaging on GitHub Actions for the three systems, checksums, download page and per-OS documentation. |
+| 1 - done | Skeleton: `files` declaration, file source abstraction with `bridge` and `handle`, generic `/open`, save in place, conflict UI, pre-prompt, no `file_handlers`, desktop install invitation. Office, Photo Studio, Media Studio, then the other apps. |
+| 2 - done | Kynoko Launcher v1: catalogue (bundled, and online every 12 h), browsers and profiles, shortcuts, associations, the Kynoko window, agent, inventory and cleanup, self-update, 7 languages. Windows first (2026-09-25, verified end to end: associate Office, double-click a .docx, edit, Ctrl+S on disk, remove everything, registry back to its prior state), then macOS and Linux (v0.2.x). |
+| 3 - done, but one item | Packaging on GitHub Actions for the three systems: release on a `v*` tag, stable file names, SHA-256 checksums. The download window lives in every app and says how to open an unsigned build on Windows and macOS. Not said there yet: Windows' Smart App Control, which blocks unsigned programs outright (section 12). |
 | 4 | Android companion APK. ChromeOS manifest. |
 
 ## 18. Decision log
@@ -810,4 +815,5 @@ catalogue in the system's language, falling back to English.
 | 2026-10-08 | "Download and install" beside "Download" (section 13): asked for by the user, never automatic. The launcher fetches the release's file for its system, checks it against GitHub's SHA-256, and installs it in place on Windows (NSIS update mode, after closing its Kynoko windows through their unsaved-work guard and letting the web engine write) or hands it to the system (macOS disk image, Linux packages); the AppImage is replaced in place. The idle watch does not quit while an install waits. |
 | 2026-10-09 | First start, asked for by the user after a first try on Ubuntu and Mint ("no app in the menu, nothing associated"; nothing was, by design, until each app was switched on): every app gets its shortcuts at once, and the window asks once whether the apps open the user's files (all ticked, the types in view, "Associate" or "Later"), rather than taking the types over silently: on Linux and macOS that answer makes them the default. A launcher already set up by hand is left as it is. The AppImage installs itself (a copy in `~/.local/share/kynoko-launcher`, its own menu entry), which also gives it a place in the menu; the `.deb` and `.rpm` have theirs already. |
 | 2026-10-09 | Asked for by the user: what is recommended is also the default for opening. An app met for the first time whose followed browser it does not recommend gets the first installed one it does (section 5): Office the Kynoko window, Media Studio, Photo Studio, PDF Editor and Games a Chromium browser when the system's is Firefox, QR Code Studio left on Firefox (it recommends both). Linux now knows the system's browser (`xdg-settings`, `xdg-mime`), which the window also shows. |
+| 2026-10-11 | The specification says what was built: the agent never had the tray / menu-bar icon section 3 planned, so a bridge session ends with its page or after 10 min without heartbeat, never from a tray. Such an icon comes with a resident mode, when a feature needs the agent to stay up. Status line and phases brought up to date. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
