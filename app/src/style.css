@@ -11,6 +11,14 @@ main { padding-block: 20px 28px; padding-inline: 24px; max-inline-size: 760px; m
 
 h1 { font-size: 1.35rem; margin: 0 0 4px; }
 .lead { margin: 0 0 20px; color: var(--kynoko-hint); }
+/* The top: the name and version, then whether it is up to date, the
+   catalogue's date and "Check now", on one line that wraps when narrow. */
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; margin-block-end: 4px; }
+.top h1 { margin: 0; }
+.top h1 .version { margin-inline-start: 8px; font-size: 0.85rem; font-weight: 500; color: var(--kynoko-hint); }
+.top .status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.top .status .note { margin: 0; }
+.catalogue-note { margin: -12px 0 16px; }
 h2 { font-size: 1rem; margin: 26px 0 10px; }
 
 .card {
@@ -229,16 +237,12 @@ button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-v
   background: rgba(var(--kynoko-glow-rgb), 0.08); border: 1px solid rgba(var(--kynoko-glow-rgb), 0.28);
 }
 .error { color: var(--kynoko-danger); margin: 10px 0 0; }
-/* What "Check now" found. */
-.check-report { margin-block-start: 10px; font-size: 0.86rem; }
-.check-report p { margin: 2px 0; }
-/* The newer version: a card of its own under the report. */
-.check-report .update { margin-block-start: 10px; display: grid; gap: 4px; }
-.check-report .update p { margin: 0; }
-.update .update-title { font-weight: 700; font-size: 0.95rem; }
-.update .note { margin: 0; }
-/* Its two buttons, one height, one line, aligned on the card's start. */
-.update-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin-block-start: 10px; }
+/* The newer version, under the lead: its name and its two buttons on one
+   line (the buttons one height), wrapping under the name when narrow. */
+.card.update { margin-block-end: 20px; padding-block: 10px; }
+.update-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.update .update-title { margin: 0; font-weight: 700; font-size: 0.95rem; }
+.update-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; }
 /* "Download" says where from, in small, on the same line and baseline: one
    line of text, centred in the button like its neighbour's. */
 button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 500; opacity: 0.75; }
@@ -246,7 +250,7 @@ button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 5
    under them, the card's whole width. */
 .update .install {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
-  margin-block-start: 12px; padding-block-start: 12px;
+  margin-block-start: 10px; padding-block-start: 10px;
   border-block-start: 1px solid var(--kynoko-hairline);
 }
 .update .install-text { flex: 1; min-inline-size: 12em; }
@@ -260,10 +264,6 @@ button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 5
 .update .install progress::-webkit-progress-bar { background: var(--kynoko-hairline-strong); border-radius: 999px; }
 .update .install progress::-webkit-progress-value { background: var(--kynoko-brand-gradient); border-radius: 999px; }
 .update .install progress::-moz-progress-bar { background: var(--kynoko-brand-gradient); border-radius: 999px; }
-.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-block-start: 26px; }
-/* The version line beside its button: a note's top margin would sit it 4 px
-   below the button's middle. */
-.foot .note { margin: 0; }
 /* The reset: apart from the rest, its effect written beside it. */
 .reset {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;

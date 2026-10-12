@@ -189,8 +189,9 @@ pre-generated static JSON document, so that serving it costs nothing:
 
 ### Refresh policy
 
-- The catalogue is refreshed **at most every 12 hours**, plus on demand
-  ("Check now", itself limited to once per minute).
+- The catalogue is refreshed **at most every 12 hours**, plus when the
+  window shows (at most once an hour) and on demand ("Check now"), these two
+  limited to once per minute.
 - Each request is conditional (`If-None-Match` / `If-Modified-Since`); a `304`
   costs the server nothing and updates only the "last checked" time.
 - The first check after start is delayed by a **random jitter** (0-10 min), so
@@ -690,9 +691,13 @@ builds as a goal.
 ## 13. Self-update notice, and "Download and install"
 
 No automatic update (Tauri's updater requires its own signing key; to
-revisit). "Check now" asks GitHub for the latest release and, when it is newer,
-the window shows it in a card: the version, the one installed, and two
-buttons. No system notification.
+revisit). The window asks GitHub for the latest release by itself when it
+shows (at most once an hour; never while it is hidden, serving files or
+assistants: its page cannot tell, the launcher says), and again on "Check
+now". All of it at the top of the window: the version beside the name; "Up
+to date" (or that it could not be checked) and the catalogue's date beside
+"Check now"; under the lead, a newer version's card, its name and two
+buttons on one line. No system notification.
 
 - **Download** (with "from GitHub" in small): the release's page, in the
   system's browser.
@@ -827,6 +832,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-11 | The specification says what was built: the agent never had the tray / menu-bar icon section 3 planned, so a bridge session ends with its page or after 10 min without heartbeat, never from a tray. Such an icon comes with a resident mode, when a feature needs the agent to stay up. Status line and phases brought up to date. |
 | 2026-10-11 | AI assistants installed on the computer use the Kynoko apps over MCP (section 19): `kynoko-launcher mcp` is a pipe between the assistant's standard input and output and the agent, which it starts when none runs; the agent answers the protocol (dual era, 2026-07-28 and the handshake versions before it) with the tools each app declares in its manifest, and relays each call to a window of the app it opens for the assistant, in the app's browser, at a `#kynokoAutomation=` fragment; the page asks its user first, runs the call in its own engine and history, and its Stop keeps the assistant out of the app for 10 minutes. One loopback WebSocket listener for pages and assistants alike, guarded like the bridge (exact Host, exact Origin for a page, a token in the state folder and no Origin for an assistant). The window's "AI assistants" switches add Kynoko to the configuration of Claude Desktop, LM Studio, Cursor, Qwen Code, VS Code and Codex (only our entry, the rest kept, a file with comments left alone, a copy kept aside), inventoried, so removed on reset and uninstall. No tray icon yet; one loopback WebSocket rather than a Tauri channel for the Kynoko window too. |
 | 2026-10-12 | Seen with Claude Desktop on Layout Studio: two calls sent together, before the user had answered, opened two windows, each asking the user. A call now finds the window opened for the app a moment ago and waits for it; `kynoko_open` finds the window already open instead of always opening one. The apps' "AI assistants" entry opens the window on that section: `kynoko-launcher://settings?app=<code>&section=assistants` (skeleton v0.111.0, `kynokoOpenLauncher(code, 'assistants')`); a link names only a section the window knows, and an older launcher shows the app. |
+| 2026-10-12 | Asked for by the user: the update moves to the top of the window, condensed (the version beside the name, "Up to date" and the catalogue's date beside "Check now", a newer version's card of one line under the lead), and the window checks by itself when it shows, at most once an hour, never while hidden (section 13). Still no automatic install. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol

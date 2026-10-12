@@ -892,6 +892,10 @@ struct StateView {
     assistant_snippet: String,
     /// Assistants connected right now (kynoko-launcher mcp).
     assistants_online: usize,
+    /// The window is on screen: it lives hidden while the launcher serves
+    /// files or assistants, and its page cannot tell (the web engine says
+    /// "visible" either way).
+    shown: bool,
 }
 
 #[derive(Serialize)]
@@ -997,6 +1001,7 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         assistants: assistants::views(),
         assistant_snippet: assistants::snippet(),
         assistants_online: shared.automation.lock().expect("automation lock").as_ref().map(|a| a.clients()).unwrap_or(0),
+        shown: app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false),
     }
 }
 

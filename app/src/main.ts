@@ -40,6 +40,8 @@ interface State {
   assistants: AssistantView[];
   /** What to add by hand to another assistant's configuration. */
   assistantSnippet: string;
+  /** The window is on screen (it lives hidden while the launcher serves files or assistants). */
+  shown: boolean;
   /** Assistants connected right now. */
   assistantsOnline: number;
 }
@@ -321,10 +323,32 @@ function iconOf(code: string): HTMLElement {
   return img;
 }
 
-/** What "Check now" answers (see check_catalogue). */
+/** What a check answers (see check_catalogue). */
 interface CheckReport { catalogue: string; catalogueError: string | null; current: string; latest: string | null; newer: boolean; installable: boolean }
 let checking = false;
 let lastCheck: CheckReport | null = null;
+/** When the last check started: the window checks by itself when it shows,
+ *  at most once an hour (AUTO_CHECK_EVERY); "Check now" any time. */
+let checkedAt = 0;
+const AUTO_CHECK_EVERY = 3_600_000;
+
+/** Asks for the catalogue and the latest release (check_catalogue). */
+function check(version: string): void {
+  if (checking || installing()) return;
+  checking = true;
+  checkedAt = Date.now();
+  void render();
+  void invoke<CheckReport>('check_catalogue')
+    .then((r) => { lastCheck = r; }, (e) => { lastCheck = { catalogue: 'failed', catalogueError: String(e), current: version, latest: null, newer: false, installable: false }; })
+    .finally(() => { checking = false; void render(); });
+}
+
+/** The check the window makes by itself when it shows (never while hidden). */
+async function autoCheck(): Promise<void> {
+  if (Date.now() - checkedAt < AUTO_CHECK_EVERY) return;
+  const state = await invoke<State>('get_state', { lang });
+  if (state.shown) check(state.version);
+}
 
 /** The newer version downloaded and checked (update_download). */
 interface UpdateReady { version: string; mode: 'restart' | 'handoff'; windows: number; files: number }
@@ -425,6 +449,62 @@ async function startInstall(): Promise<void> {
   await render();
 }
 
+/**
+ * The top of the window: the launcher's name and version, whether it is up
+ * to date and the catalogue's date beside "Check now", on one line; under
+ * the lead, the newer version's card when there is one, and the catalogue's
+ * trouble when it has some.
+ */
+function topOf(state: State): HTMLElement[] {
+  const c = lastCheck;
+  const words = [
+    // While a check runs, its button says so; a newer version has its card.
+    ...(checking || !c || c.newer ? [] : [t(lang, c.latest ? 'UPDATE_NONE' : 'UPDATE_UNKNOWN')]),
+    t(lang, 'CATALOGUE', { date: new Date(state.catalogueDate).toLocaleDateString(lang) }),
+  ];
+  const button = el('button', { type: 'button', disabled: checking || installing() }, t(lang, checking ? 'CHECKING' : 'CHECK_NOW'));
+  button.addEventListener('click', () => check(state.version));
+  const top: HTMLElement[] = [
+    el('header', { class: 'top' },
+      // Latin words and a number: left to right in every language.
+      el('h1', { dir: 'ltr' }, 'Kynoko Launcher', el('span', { class: 'version' }, state.version)),
+      el('span', { class: 'status' }, el('span', { class: 'note' }, words.join(' · ')), button)),
+    el('p', { class: 'lead' }, t(lang, 'LEAD')),
+  ];
+  if (c?.newer && c.latest) top.push(updateCard(c));
+  // Said quietly, with the last success: never a notification.
+  const last = state.catalogueChecked ? new Date(state.catalogueChecked * 1000).toLocaleString(lang) : null;
+  const trouble = c?.catalogue === 'failed' ? t(lang, 'CAT_FAILED', { error: c.catalogueError ?? '' })
+    : state.catalogueError ? (last ? t(lang, 'CATALOGUE_FAILED', { date: last }) : t(lang, 'CATALOGUE_BUNDLED'))
+    : !state.catalogueChecked && !checking ? t(lang, 'CATALOGUE_BUNDLED')
+    : null;
+  if (trouble) top.push(el('p', { class: 'note catalogue-note' }, trouble));
+  return top;
+}
+
+/**
+ * The newer version: its name and its two buttons on one line, "Download
+ * and install" where this system has a file in the release, "Download" (the
+ * release's page on GitHub) always; under them, where an install is.
+ */
+function updateCard(c: CheckReport): HTMLElement {
+  const busy = installing();
+  const actions = el('div', { class: 'update-actions' });
+  if (c.installable) {
+    const both = el('button', { type: 'button', class: 'primary', disabled: busy }, t(lang, 'INSTALL_NEW'));
+    both.addEventListener('click', () => void startInstall());
+    actions.append(both);
+  }
+  const download = el('button', { type: 'button', class: c.installable ? 'from' : 'primary from', disabled: busy },
+    t(lang, 'DOWNLOAD_NEW'), el('small', {}, t(lang, 'DOWNLOAD_FROM')));
+  download.addEventListener('click', () => void invoke('open_download'));
+  actions.append(download);
+  const card = el('section', { class: 'card update', role: 'status' },
+    el('div', { class: 'update-row' }, el('p', { class: 'update-title' }, t(lang, 'APP_NEWER', { version: c.latest ?? '' })), actions));
+  if (install) card.append(installLine(install));
+  return card;
+}
+
 /** What the last change to an assistant's configuration calls for (restart it, add Kynoko by hand). */
 let assistantNote: string | null = null;
 
@@ -485,7 +565,7 @@ async function render(): Promise<void> {
   currentOs = state.os;
   root.replaceChildren();
 
-  root.append(el('h1', {}, 'Kynoko Launcher'), el('p', { class: 'lead' }, t(lang, 'LEAD')));
+  root.append(...topOf(state));
   const welcome = welcomeOf(state);
   if (welcome) root.append(welcome);
 
@@ -595,70 +675,16 @@ async function render(): Promise<void> {
       alert(t(lang, 'REMOVED'));
     });
   });
-  const date = new Date(state.catalogueDate);
-  const check = el('button', { type: 'button', disabled: checking || installing() }, t(lang, checking ? 'CHECKING' : 'CHECK_NOW'));
-  check.addEventListener('click', () => {
-    checking = true;
-    lastCheck = null;
-    void render();
-    void invoke<CheckReport>('check_catalogue')
-      .then((r) => { lastCheck = r; }, (e) => { lastCheck = { catalogue: 'failed', catalogueError: String(e), current: state.version, latest: null, newer: false, installable: false }; })
-      .finally(() => { checking = false; void render(); });
-  });
-  const status = el('span', { class: 'note' }, `Kynoko Launcher ${state.version} · ${t(lang, 'CATALOGUE', { date: date.toLocaleDateString(lang) })}`);
-  const foot = el('div', { class: 'foot' }, el('span', { class: 'field' }, status, check));
-  root.append(foot);
-  // What "Check now" found, said where it was asked.
-  if (lastCheck) {
-    const c = lastCheck;
-    const catalogueLine = c.catalogue === 'updated' ? t(lang, 'CAT_UPDATED')
-      : c.catalogue === 'unchanged' ? t(lang, 'CAT_UNCHANGED')
-      : c.catalogue === 'recent' ? t(lang, 'CAT_RECENT')
-      : t(lang, 'CAT_FAILED', { error: c.catalogueError ?? '' });
-    const report = el('div', { class: 'check-report', role: 'status' }, el('p', {}, catalogueLine));
-    if (c.newer && c.latest) {
-      // The newer version, in a card of its own: what it is, what is
-      // installed, "Download and install" where this system has a file in
-      // the release, "Download" (the release's page on GitHub) always, and
-      // where an install is.
-      const busy = installing();
-      const actions = el('div', { class: 'update-actions' });
-      if (c.installable) {
-        const both = el('button', { type: 'button', class: 'primary', disabled: busy }, t(lang, 'INSTALL_NEW'));
-        both.addEventListener('click', () => void startInstall());
-        actions.append(both);
-      }
-      const download = el('button', { type: 'button', class: c.installable ? 'from' : 'primary from', disabled: busy },
-        t(lang, 'DOWNLOAD_NEW'), el('small', {}, t(lang, 'DOWNLOAD_FROM')));
-      download.addEventListener('click', () => void invoke('open_download'));
-      actions.append(download);
-      const card = el('section', { class: 'card update' },
-        el('p', { class: 'update-title' }, t(lang, 'APP_NEWER', { version: c.latest })),
-        el('p', { class: 'note' }, t(lang, 'APP_INSTALLED', { version: c.current })),
-        actions);
-      if (install) card.append(installLine(install));
-      report.append(card);
-    } else {
-      report.append(el('p', {}, c.latest ? t(lang, 'APP_UPTODATE', { version: c.current }) : t(lang, 'APP_UNKNOWN')));
-    }
-    root.append(report);
-  }
   // The reset, set apart and said in full: the launcher stays, everything it
   // did to the system goes, and its settings with it.
   root.append(el('div', { class: 'reset' }, remove, el('p', { class: 'note' }, t(lang, 'REMOVE_NOTE'))));
-  // A failure is said here, quietly, with the last success: never a notification.
-  if (state.catalogueError) {
-    const last = state.catalogueChecked ? new Date(state.catalogueChecked * 1000).toLocaleString(lang) : null;
-    root.append(el('p', { class: 'note' }, last ? t(lang, 'CATALOGUE_FAILED', { date: last }) : t(lang, 'CATALOGUE_BUNDLED')));
-  } else if (!state.catalogueChecked) {
-    root.append(el('p', { class: 'note' }, t(lang, 'CATALOGUE_BUNDLED')));
-  }
   if (state.focusSection) document.getElementById(state.focusSection)?.scrollIntoView({ block: 'start' });
   else if (state.focus) document.getElementById('app-' + state.focus)?.scrollIntoView({ block: 'center' });
 }
 
-// The running window was asked for again (an app's menu entry): show that app.
-void listen('focus-app', () => void render());
+// The window was asked for (started, or an app's menu entry): show that
+// app, and check for a newer version if that was not done in the last hour.
+void listen('focus-app', () => { void render(); void autoCheck(); });
 // The catalogue changed in the background: show the new one.
 void listen('catalogue-updated', () => void render());
 // Something written in the background (the first start's shortcuts): show it.
@@ -678,4 +704,5 @@ void listen<number>('update-flushing', (e) => {
   paintInstall();
 });
 
-void render();
+// The window may already be on screen when its page starts.
+void render().then(() => void autoCheck());
