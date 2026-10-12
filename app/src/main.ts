@@ -32,6 +32,8 @@ interface State {
   os: string;
   /** The app a `kynoko-launcher://settings?app=` link asked for. */
   focus: string | null;
+  /** The section (its id) a `section=` link asked for: it wins over the app. */
+  focusSection: string | null;
   /** The first start's question about the files is still to be answered. */
   askAssociations: boolean;
   /** AI assistants the launcher knows, and whether Kynoko is in their configuration. */
@@ -432,7 +434,7 @@ let assistantNote: string | null = null;
  * other assistant gets what to add by hand.
  */
 function assistantsOf(state: State): HTMLElement {
-  const section = el('section', { class: 'assistants' });
+  const section = el('section', { class: 'assistants', id: 'assistants' });
   section.append(el('h2', {}, t(lang, 'ASSISTANTS_TITLE')), el('p', { class: 'note' }, t(lang, 'ASSISTANTS_LEAD')));
   const shown = state.assistants.filter((a) => a.installed || a.connected);
   if (shown.length) {
@@ -651,7 +653,8 @@ async function render(): Promise<void> {
   } else if (!state.catalogueChecked) {
     root.append(el('p', { class: 'note' }, t(lang, 'CATALOGUE_BUNDLED')));
   }
-  if (state.focus) document.getElementById('app-' + state.focus)?.scrollIntoView({ block: 'center' });
+  if (state.focusSection) document.getElementById(state.focusSection)?.scrollIntoView({ block: 'start' });
+  else if (state.focus) document.getElementById('app-' + state.focus)?.scrollIntoView({ block: 'center' });
 }
 
 // The running window was asked for again (an app's menu entry): show that app.

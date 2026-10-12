@@ -170,6 +170,18 @@ impl Automation {
             .map(|(t, _)| t.clone())
     }
 
+    /// The page of `app` opened less than `within` ago that has not connected
+    /// yet: its user may still be reading the question it asks.
+    pub fn awaited_page(&self, app: &str, within: Duration) -> Option<String> {
+        let state = self.lock();
+        state
+            .pages
+            .iter()
+            .filter(|(_, p)| p.connected_at.is_none() && p.app.eq_ignore_ascii_case(app) && p.opened.elapsed() < within)
+            .max_by_key(|(_, p)| p.opened)
+            .map(|(t, _)| t.clone())
+    }
+
     /// Waits until the page connects (the user said yes), at most `timeout`.
     pub fn wait_connected(&self, token: &str, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;

@@ -86,11 +86,15 @@ pub struct AppTools {
 pub struct Mcp {
     host: Host,
     tools: Mutex<Option<(Instant, Vec<AppTools>)>>,
+    /// Held while a call looks for its app's window and opens one: calls
+    /// running side by side (an assistant may send several at once) find
+    /// the same window instead of opening one each.
+    opening: Mutex<()>,
 }
 
 impl Mcp {
     pub fn new(host: Host) -> Arc<Mcp> {
-        Arc::new(Mcp { host, tools: Mutex::new(None) })
+        Arc::new(Mcp { host, tools: Mutex::new(None), opening: Mutex::new(()) })
     }
 
     /// One message from an assistant; answers go through `out`.
@@ -207,8 +211,8 @@ tool prefix and tools, and whether a window of it is already open for you.",
                 "name": "kynoko_open",
                 "title": "Open a Kynoko app",
                 "description": "Opens a window of a Kynoko app for you (its code or its tool prefix), optionally on one of its \
-tools (facade). The user sees it and must allow you there the first time: this waits for them. You rarely need it: \
-calling an app's tool opens the app by itself.",
+tools (facade), or finds the one already open for you. The user sees it and must allow you there the first time: \
+this waits for them. You rarely need it: calling an app's tool opens the app by itself.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -272,7 +276,7 @@ calling an app's tool opens the app by itself.",
                 let Some(app) = self.apps_tools().into_iter().find(|a| a.code.eq_ignore_ascii_case(asked) || a.prefix == asked) else {
                     return failure(&format!("No Kynoko app \"{asked}\" takes an assistant here: kynoko_apps lists those that do."));
                 };
-                match self.window(automation, &app, facade, true) {
+                match self.window(automation, &app, facade) {
                     Ok(_) => text(&format!("{} is open and ready for you.", app.name)),
                     Err(message) => failure(&message),
                 }
@@ -288,7 +292,7 @@ calling an app's tool opens the app by itself.",
                     .filter(|f| !f.is_empty() && f.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '/'))
                     .map(str::to_string);
                 let facade = chosen.or_else(|| tool.facade.clone());
-                let token = match self.window(automation, &app, facade.as_deref(), false) {
+                let token = match self.window(automation, &app, facade.as_deref()) {
                     Ok(token) => token,
                     Err(message) => return failure(&message),
                 };
@@ -300,21 +304,27 @@ calling an app's tool opens the app by itself.",
         }
     }
 
-    /// The window of `app` working for the assistant: the one open, else a
-    /// new one, once its user allowed it (`fresh`: always a new one).
-    fn window(&self, automation: &Automation, app: &AppTools, facade: Option<&str>, fresh: bool) -> Result<String, String> {
+    /// The window of `app` working for the assistant, once its user allowed
+    /// it: the one open, else the one opened a moment ago whose user is still
+    /// reading the question, else a new one. One window per app: a second
+    /// would ask the user a second time, for the same work.
+    fn window(&self, automation: &Automation, app: &AppTools, facade: Option<&str>) -> Result<String, String> {
         if automation.stopped_recently(&app.code) {
             return Err(format!(
                 "The user stopped you in {} a moment ago. Ask them before working there again.",
                 app.name
             ));
         }
-        if !fresh {
+        let token = {
+            let _one_at_a_time = self.opening.lock().expect("opening lock");
             if let Some(token) = automation.connected_page(&app.code) {
                 return Ok(token);
             }
-        }
-        let token = (self.host.open)(automation, &app.code, facade)?;
+            match automation.awaited_page(&app.code, OPEN_WAIT) {
+                Some(token) => token,
+                None => (self.host.open)(automation, &app.code, facade)?,
+            }
+        };
         if automation.wait_connected(&token, OPEN_WAIT) {
             Ok(token)
         } else {
@@ -605,6 +615,50 @@ mod tests {
         assert_eq!(call["error"]["code"], -32602);
         let method = exchange(&mcp, json!({ "jsonrpc": "2.0", "id": 6, "method": "resources/list" }));
         assert_eq!(method["error"]["code"], -32601);
+    }
+
+    #[test]
+    fn calls_side_by_side_share_one_window() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        const ORIGIN: &str = "https://qrcode-studio.kynoko.com";
+        let opened = Arc::new(AtomicUsize::new(0));
+        let counter = opened.clone();
+        let host = Host {
+            apps: Box::new(Vec::new),
+            open: Box::new(move |automation, code, _| {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Ok(automation.new_page(code, ORIGIN))
+            }),
+            version: "0.0.0".into(),
+        };
+        let mcp = Mcp::new(host);
+        let qr = parse_declaration(&app(), &declaration()).unwrap();
+        let automation = Automation::start(Arc::new(|_, _, _, _| {})).expect("listener");
+        // Three calls at once, while the user has not answered yet.
+        let calls: Vec<_> = (0..3)
+            .map(|_| {
+                let (mcp, automation, qr) = (mcp.clone(), automation.clone(), qr.clone());
+                thread::spawn(move || mcp.window(&automation, &qr, Some("create")))
+            })
+            .collect();
+        let token = loop {
+            if let Some(t) = automation.awaited_page("QrcodeStudio", OPEN_WAIT) {
+                break t;
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        thread::sleep(Duration::from_millis(200));
+        // The user allows the assistant in the one window that opened.
+        let stream = std::net::TcpStream::connect(("127.0.0.1", automation.port())).expect("tcp");
+        let mut req = tungstenite::client::IntoClientRequest::into_client_request(format!("ws://127.0.0.1:{}/a/{token}", automation.port())).expect("request");
+        req.headers_mut().insert("Origin", ORIGIN.parse().expect("header"));
+        let _page = tungstenite::client(req, stream).expect("the page");
+        for call in calls {
+            assert_eq!(call.join().expect("call"), Ok(token.clone()));
+        }
+        // kynoko_open finds it as well.
+        assert_eq!(mcp.window(&automation, &qr, None), Ok(token));
+        assert_eq!(opened.load(Ordering::SeqCst), 1, "one window");
     }
 
     #[test]

@@ -2,7 +2,8 @@
 //!
 //! One binary, several roles:
 //! - no argument, or `kynoko-launcher://settings?app=<code>` (the apps'
-//!   menu entry): the settings window, on that app;
+//!   menu entry): the settings window, on that app (`&section=assistants`:
+//!   on the AI assistants);
 //! - `open <file>...`: what a double-click runs; opens each file in the app
 //!   that reads it, through the loopback bridge;
 //! - `launch <app>[/<facade>]`: what a shortcut runs;
@@ -78,8 +79,8 @@ const CLOSE_ASK_GRACE: Duration = Duration::from_secs(2);
 const MARKER: &str = "kynokoLauncher=1";
 
 enum Command {
-    /// The settings window, optionally on one app.
-    Window(Option<String>),
+    /// The settings window, optionally on one app or one of its sections.
+    Window(Focus),
     /// Files to open, and the app the system entry named (`open --app <code>`),
     /// when it named one.
     Open(Option<String>, Vec<PathBuf>),
@@ -101,9 +102,30 @@ fn parse(args: &[String]) -> Command {
         Some("launch") => Command::Launch(args.get(1).cloned().unwrap_or_default()),
         Some("cleanup") => Command::Cleanup { keep_preferences: args.get(1).is_some_and(|a| a == "--keep-preferences") },
         Some("agent") => Command::Agent,
-        Some(url) if url.starts_with(&format!("{}:", assoc::SCHEME)) => Command::Window(app_param(url)),
-        _ => Command::Window(None),
+        Some(url) if url.starts_with(&format!("{}:", assoc::SCHEME)) => Command::Window(focus_of(url)),
+        _ => Command::Window(Focus::default()),
     }
+}
+
+/// What a `kynoko-launcher://settings?...` link asks the window to show.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Focus {
+    app: Option<String>,
+    section: Option<&'static str>,
+}
+
+/// The window's sections a link may name (`section=`), as their ids in it.
+const SECTIONS: &[&str] = &["assistants"];
+
+fn focus_of(url: &str) -> Focus {
+    Focus { app: app_param(url), section: section_param(url) }
+}
+
+/// `...?section=assistants` -> Some("assistants"); only a known section.
+fn section_param(url: &str) -> Option<&'static str> {
+    let query = url.split_once('?')?.1;
+    let asked = query.split('&').find_map(|pair| pair.strip_prefix("section="))?;
+    SECTIONS.iter().copied().find(|s| *s == asked)
 }
 
 /// `kynoko-launcher://settings?app=Office` -> Some("Office"). Anything that
@@ -150,6 +172,8 @@ struct Shared {
     last_open: Mutex<Option<Instant>>,
     /// The app the window should put forward (from a `settings?app=` link).
     focus: Mutex<Option<String>>,
+    /// The section it should show (from a `section=` link).
+    focus_section: Mutex<Option<&'static str>>,
     /// macOS: a file or link arrived as an Apple Event (the window, asked for
     /// by the bare start that precedes it, is then not shown).
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -746,14 +770,15 @@ fn dispatch(app: &AppHandle, command: Command) {
     let shared = app.state::<Shared>();
     let result = match command {
         Command::Window(focus) => {
-            *shared.focus.lock().expect("lock") = focus.clone();
+            *shared.focus.lock().expect("lock") = focus.app.clone();
+            *shared.focus_section.lock().expect("lock") = focus.section;
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
             // An open window re-reads its state and puts the app forward.
-            let _ = app.emit("focus-app", focus);
+            let _ = app.emit("focus-app", focus.app);
             Ok(())
         }
         Command::Open(named, files) => open_files(&shared, named.as_deref(), &files),
@@ -857,6 +882,8 @@ struct StateView {
     os: String,
     /// The app to put forward, once.
     focus: Option<String>,
+    /// The section to show, once (it wins over the app).
+    focus_section: Option<&'static str>,
     /// The first start's question: should the apps open the user's files?
     ask_associations: bool,
     /// AI assistants: those the launcher knows, and whether they know Kynoko.
@@ -965,6 +992,7 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         windows: cfg!(windows),
         os: std::env::consts::OS.to_string(),
         focus: shared.focus.lock().expect("lock").take(),
+        focus_section: shared.focus_section.lock().expect("lock").take(),
         ask_associations: settings.ask_associations,
         assistants: assistants::views(),
         assistant_snippet: assistants::snippet(),
@@ -1634,7 +1662,7 @@ fn opened(app: &AppHandle, urls: &[tauri::Url]) {
         dispatch(app, Command::Open(None, files));
     }
     for link in urls.iter().filter(|u| u.scheme() == assoc::SCHEME) {
-        dispatch(app, Command::Window(app_param(link.as_str())));
+        dispatch(app, Command::Window(focus_of(link.as_str())));
     }
     let shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false);
     if !shown {
@@ -1696,6 +1724,7 @@ pub fn run() {
             handle: std::sync::OnceLock::new(),
             last_open: Mutex::new(None),
             focus: Mutex::new(None),
+            focus_section: Mutex::new(None),
             opened_by_event: std::sync::atomic::AtomicBool::new(false),
             pending_update: Mutex::new(None),
             update_cancel: std::sync::atomic::AtomicBool::new(false),
@@ -1761,13 +1790,13 @@ pub fn run() {
             // file, then hands the file over as an Apple Event: wait a moment
             // before showing the settings window, which that start did not mean.
             #[cfg(target_os = "macos")]
-            if matches!(first, Command::Window(None)) {
+            if matches!(first, Command::Window(Focus { app: None, section: None })) {
                 let later = handle.clone();
                 thread::spawn(move || {
                     thread::sleep(Duration::from_millis(800));
                     let shared = later.state::<Shared>();
                     if !shared.opened_by_event.load(std::sync::atomic::Ordering::SeqCst) {
-                        dispatch(&later, Command::Window(None));
+                        dispatch(&later, Command::Window(Focus::default()));
                     }
                 });
                 return Ok(());
@@ -1826,7 +1855,13 @@ mod tests {
         assert_eq!(app_param("kynoko-launcher://settings?x=1&app=PhotoStudio"), Some("PhotoStudio".into()));
         assert_eq!(app_param("kynoko-launcher://settings?app=../../evil"), None);
         assert_eq!(app_param("kynoko-launcher://settings"), None);
-        assert!(matches!(parse(&["kynoko-launcher://settings?app=Office".into()]), Command::Window(Some(_))));
+        assert!(matches!(parse(&["kynoko-launcher://settings?app=Office".into()]), Command::Window(Focus { app: Some(_), section: None })));
+        assert_eq!(
+            focus_of("kynoko-launcher://settings?app=LayoutStudio&section=assistants"),
+            Focus { app: Some("LayoutStudio".into()), section: Some("assistants") }
+        );
+        assert_eq!(section_param("kynoko-launcher://settings?section=../evil"), None);
+        assert_eq!(section_param("kynoko-launcher://settings?section=assistants2"), None);
     }
 
     #[test]

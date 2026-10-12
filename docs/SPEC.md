@@ -826,6 +826,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-09 | Asked for by the user: what is recommended is also the default for opening. An app met for the first time whose followed browser it does not recommend gets the first installed one it does (section 5): Office the Kynoko window, Media Studio, Photo Studio, PDF Editor and Games a Chromium browser when the system's is Firefox, QR Code Studio left on Firefox (it recommends both). Linux now knows the system's browser (`xdg-settings`, `xdg-mime`), which the window also shows. |
 | 2026-10-11 | The specification says what was built: the agent never had the tray / menu-bar icon section 3 planned, so a bridge session ends with its page or after 10 min without heartbeat, never from a tray. Such an icon comes with a resident mode, when a feature needs the agent to stay up. Status line and phases brought up to date. |
 | 2026-10-11 | AI assistants installed on the computer use the Kynoko apps over MCP (section 19): `kynoko-launcher mcp` is a pipe between the assistant's standard input and output and the agent, which it starts when none runs; the agent answers the protocol (dual era, 2026-07-28 and the handshake versions before it) with the tools each app declares in its manifest, and relays each call to a window of the app it opens for the assistant, in the app's browser, at a `#kynokoAutomation=` fragment; the page asks its user first, runs the call in its own engine and history, and its Stop keeps the assistant out of the app for 10 minutes. One loopback WebSocket listener for pages and assistants alike, guarded like the bridge (exact Host, exact Origin for a page, a token in the state folder and no Origin for an assistant). The window's "AI assistants" switches add Kynoko to the configuration of Claude Desktop, LM Studio, Cursor, Qwen Code, VS Code and Codex (only our entry, the rest kept, a file with comments left alone, a copy kept aside), inventoried, so removed on reset and uninstall. No tray icon yet; one loopback WebSocket rather than a Tauri channel for the Kynoko window too. |
+| 2026-10-12 | Seen with Claude Desktop on Layout Studio: two calls sent together, before the user had answered, opened two windows, each asking the user. A call now finds the window opened for the app a moment ago and waits for it; `kynoko_open` finds the window already open instead of always opening one. The apps' "AI assistants" entry opens the window on that section: `kynoko-launcher://settings?app=<code>&section=assistants` (skeleton v0.111.0, `kynokoOpenLauncher(code, 'assistants')`); a link names only a section the window knows, and an older launcher shows the app. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol
@@ -880,7 +881,8 @@ The assistant's name (`clientInfo`) is shown by the pages.
 The tools:
 
 - `kynoko_apps` (read): the apps an assistant can use, their tools, whether
-  a window is open for it; `kynoko_open` (`app`, `facade`): opens one.
+  a window is open for it; `kynoko_open` (`app`, `facade`): the window open
+  for it, else a new one.
 - Each app's own: the `automation` block of the app's manifest,
   `<app address>/assets/kynoko-app.json` (written at build time from the
   app's `core/automation.json`): `{ v: 1, prefix, tools: [{ name, title?,
@@ -896,7 +898,11 @@ The tools:
 A call to an app's tool goes to the window of that app that connected last;
 none: one is opened (below) and the call waits up to 2 minutes for the user
 to allow the assistant there, then up to 3 minutes for the answer. A tool
-call runs on its own thread: the assistant's other messages go on.
+call runs on its own thread: the assistant's other messages go on. One
+window per app: while a window opened for an assistant waits for its user's
+answer (those 2 minutes), every call to that app, from any assistant, waits
+for that same window instead of opening another, which would ask the user
+again for the same work.
 
 ### The page
 
