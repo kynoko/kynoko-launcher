@@ -928,6 +928,7 @@ entry, `kynoko` (`{ "command": "<launcher>", "args": ["mcp"] }`):
 | Assistant | File |
 |---|---|
 | Claude Desktop | `<config dir>/Claude/claude_desktop_config.json`, `mcpServers` |
+| Claude Desktop (Microsoft Store) | `%LOCALAPPDATA%/Packages/Claude_*/LocalCache/Roaming/Claude/claude_desktop_config.json` (a packaged app's Roaming folder), `mcpServers` |
 | LM Studio | `~/.lmstudio/mcp.json`, `mcpServers` |
 | Cursor | `~/.cursor/mcp.json`, `mcpServers` |
 | Qwen Code | `~/.qwen/settings.json`, `mcpServers` |

@@ -259,6 +259,9 @@ button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 5
 .update .install progress::-webkit-progress-value { background: var(--kynoko-brand-gradient); border-radius: 999px; }
 .update .install progress::-moz-progress-bar { background: var(--kynoko-brand-gradient); border-radius: 999px; }
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-block-start: 26px; }
+/* The version line beside its button: a note's top margin would sit it 4 px
+   below the button's middle. */
+.foot .note { margin: 0; }
 /* The reset: apart from the rest, its effect written beside it. */
 .reset {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;

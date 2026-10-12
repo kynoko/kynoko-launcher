@@ -67,9 +67,34 @@ fn config() -> Option<PathBuf> {
     dirs::config_dir()
 }
 
+fn local() -> Option<PathBuf> {
+    if crate::settings::isolated() {
+        return Some(crate::settings::dir().join("home").join("local"));
+    }
+    dirs::data_local_dir()
+}
+
+/// Claude Desktop installed from the Microsoft Store: a packaged app, whose
+/// Roaming folder Windows keeps inside its package
+/// (`%LOCALAPPDATA%\Packages\Claude_<publisher>\LocalCache\Roaming\Claude`),
+/// which is where it reads its configuration, not `%APPDATA%\Claude`.
+fn claude_store_dir() -> Option<PathBuf> {
+    let packages = local()?.join("Packages");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(packages)
+        .ok()?
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with("Claude_"))
+        .map(|e| e.path().join("LocalCache").join("Roaming").join("Claude"))
+        .filter(|d| d.is_dir())
+        .collect();
+    found.sort();
+    found.into_iter().next()
+}
+
 fn clients() -> Vec<Client> {
     vec![
         Client { id: "claude", name: "Claude Desktop", format: Format::McpServers, dir: config().map(|c| c.join("Claude")), file: "claude_desktop_config.json" },
+        Client { id: "claude-store", name: "Claude Desktop (Microsoft Store)", format: Format::McpServers, dir: claude_store_dir(), file: "claude_desktop_config.json" },
         Client { id: "lmstudio", name: "LM Studio", format: Format::McpServers, dir: home().map(|h| h.join(".lmstudio")), file: "mcp.json" },
         Client { id: "cursor", name: "Cursor", format: Format::McpServers, dir: home().map(|h| h.join(".cursor")), file: "mcp.json" },
         Client { id: "qwen", name: "Qwen Code", format: Format::McpServers, dir: home().map(|h| h.join(".qwen")), file: "settings.json" },
