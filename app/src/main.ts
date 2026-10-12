@@ -362,6 +362,13 @@ function installText(i: Install): string {
  *  and while the Kynoko windows are awaited, a way to give up. */
 function installLine(i: Install): HTMLElement {
   const line = el('div', { class: `install ${i.phase}`, id: 'install-line', role: 'status' }, el('span', { class: 'install-text' }, installText(i)));
+  // The windows are closed and the web engine is given time to write: the
+  // user may choose not to wait.
+  if (i.phase === 'flushing') {
+    const now = el('button', { type: 'button', class: 'primary' }, t(lang, 'INSTALL_NOW'));
+    now.addEventListener('click', () => { now.disabled = true; void invoke('update_now'); });
+    line.append(now);
+  }
   if (i.phase === 'waiting' || i.phase === 'flushing') {
     const cancel = el('button', { type: 'button' }, t(lang, 'INSTALL_CANCEL'));
     cancel.addEventListener('click', () => void invoke('update_cancel'));

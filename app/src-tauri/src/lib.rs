@@ -158,6 +158,8 @@ struct Shared {
     /// (update_download), and the user giving up the wait (update_cancel).
     pending_update: Mutex<Option<(PathBuf, update::Mode)>>,
     update_cancel: std::sync::atomic::AtomicBool,
+    /// The user chose not to wait for the web engine's writes (update_now).
+    update_now: std::sync::atomic::AtomicBool,
     /// update_install is closing the Kynoko windows and waiting: the idle
     /// watch must not quit before the installer is started.
     update_running: std::sync::atomic::AtomicBool,
@@ -1350,6 +1352,7 @@ async fn update_install(app: AppHandle) -> Result<String, String> {
     }
     let shared = app.state::<Shared>();
     shared.update_cancel.store(false, std::sync::atomic::Ordering::SeqCst);
+    shared.update_now.store(false, std::sync::atomic::Ordering::SeqCst);
     shared.update_running.store(true, std::sync::atomic::Ordering::SeqCst);
     tauri::async_runtime::spawn_blocking(move || {
         let outcome = install_in_place(&app, &path);
@@ -1388,7 +1391,9 @@ fn install_in_place(app: &AppHandle, path: &std::path::Path) -> Result<String, S
     loop {
         let since = shared.last_app_window.lock().expect("lock").map(|t| t.elapsed());
         let left = since.map(|s| FLUSH_GRACE.saturating_sub(s)).unwrap_or_default();
-        if left.is_zero() {
+        // "Install now": the user takes the chance of a sign-in made in the
+        // last seconds not being written yet.
+        if left.is_zero() || shared.update_now.load(std::sync::atomic::Ordering::SeqCst) {
             break;
         }
         if cancelled() {
@@ -1411,6 +1416,13 @@ fn install_in_place(app: &AppHandle, path: &std::path::Path) -> Result<String, S
 #[tauri::command]
 fn update_cancel(shared: tauri::State<'_, Shared>) {
     shared.update_cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// The Kynoko windows are closed: the user does not want to wait for the web
+/// engine to write what it still holds (the countdown of update_install).
+#[tauri::command]
+fn update_now(shared: tauri::State<'_, Shared>) {
+    shared.update_now.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// One check of the online catalogue: Ok(true) when it changed (and was
@@ -1687,6 +1699,7 @@ pub fn run() {
             opened_by_event: std::sync::atomic::AtomicBool::new(false),
             pending_update: Mutex::new(None),
             update_cancel: std::sync::atomic::AtomicBool::new(false),
+            update_now: std::sync::atomic::AtomicBool::new(false),
             update_running: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
@@ -1720,6 +1733,7 @@ pub fn run() {
             update_download,
             update_install,
             update_cancel,
+            update_now,
             set_assistant
         ])
         .setup(move |app| {

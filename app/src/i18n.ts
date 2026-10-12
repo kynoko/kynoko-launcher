@@ -7,7 +7,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE' | 'RECOMMENDED_GROUP' | 'OTHER_BROWSERS' | 'LIMITS_WITH' | 'RECOMMEND_INSTALL'
   | 'APPS_TITLE' | 'ASSOCIATE' | 'SETTINGS_FOR' | 'SUMMARY_FILES' | 'SUMMARY_SHORTCUTS' | 'COUNT_OF' | 'NONE' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUT_ITEMS_WINDOWS' | 'SHORTCUT_ITEMS_MACOS' | 'SHORTCUT_ITEMS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
-  | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_UPDATED' | 'CAT_UNCHANGED' | 'CAT_FAILED' | 'CAT_RECENT' | 'APP_UPTODATE' | 'APP_NEWER' | 'APP_INSTALLED' | 'APP_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED'
+  | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_UPDATED' | 'CAT_UNCHANGED' | 'CAT_FAILED' | 'CAT_RECENT' | 'APP_UPTODATE' | 'APP_NEWER' | 'APP_INSTALLED' | 'APP_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'INSTALL_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED'
   | 'WELCOME_TITLE' | 'WELCOME_DEFAULT' | 'WELCOME_WINDOWS' | 'WELCOME_ASSOCIATE' | 'WELCOME_LATER'
   | 'ASSISTANTS_TITLE' | 'ASSISTANTS_LEAD' | 'ASSISTANTS_NONE' | 'ASSISTANTS_RESTART' | 'ASSISTANTS_ONLINE' | 'ASSISTANTS_MANUAL' | 'ASSISTANTS_MANUAL_HINT' | 'ASSISTANTS_COPY' | 'ASSISTANTS_COPIED' | 'ASSISTANTS_NOT_JSON' | 'ASSISTANTS_FAILED',
   string
@@ -78,6 +78,7 @@ const FR: Dict = {
   INSTALL_CANCELLED: "Installation annulée.",
   INSTALL_FAILED: "Installation impossible ({{error}}). Utilisez Télécharger.",
   INSTALL_CANCEL: "Annuler",
+  INSTALL_NOW: "Installer maintenant",
   CATALOGUE_FAILED: "Mise à jour du catalogue impossible pour l'instant. Dernière vérification réussie : {{date}}.",
   CATALOGUE_BUNDLED: 'Catalogue fourni avec le programme, pas encore mis à jour en ligne.',
   WELCOME_TITLE: "Ouvrir vos fichiers avec les apps Kynoko ?",
@@ -163,6 +164,7 @@ const EN: Dict = {
   INSTALL_CANCELLED: "Installation cancelled.",
   INSTALL_FAILED: "Could not install ({{error}}). Use Download.",
   INSTALL_CANCEL: "Cancel",
+  INSTALL_NOW: "Install now",
   CATALOGUE_FAILED: 'The catalogue cannot be updated right now. Last successful check: {{date}}.',
   CATALOGUE_BUNDLED: 'Catalogue shipped with the program, not yet updated online.',
   WELCOME_TITLE: "Open your files with the Kynoko apps?",
@@ -248,6 +250,7 @@ const ES: Dict = {
   INSTALL_CANCELLED: "Instalación cancelada.",
   INSTALL_FAILED: "No se pudo instalar ({{error}}). Usa Descargar.",
   INSTALL_CANCEL: "Cancelar",
+  INSTALL_NOW: "Instalar ahora",
   CATALOGUE_FAILED: 'Ahora mismo no se puede actualizar el catálogo. Última comprobación correcta: {{date}}.',
   CATALOGUE_BUNDLED: 'Catálogo incluido con el programa, aún no actualizado en línea.',
   WELCOME_TITLE: "¿Abrir sus archivos con las apps de Kynoko?",
@@ -333,6 +336,7 @@ const JA: Dict = {
   INSTALL_CANCELLED: "インストールを取り消しました。",
   INSTALL_FAILED: "インストールできませんでした ({{error}})。「ダウンロード」を使ってください。",
   INSTALL_CANCEL: "キャンセル",
+  INSTALL_NOW: "今すぐインストール",
   CATALOGUE_FAILED: '現在カタログを更新できません。最後に成功した確認：{{date}}。',
   CATALOGUE_BUNDLED: 'プログラムに同梱のカタログです。まだオンラインで更新されていません。',
   WELCOME_TITLE: "ファイルを Kynoko のアプリで開きますか？",
@@ -418,6 +422,7 @@ const ZH_HANS: Dict = {
   INSTALL_CANCELLED: "已取消安装。",
   INSTALL_FAILED: "无法安装（{{error}}）。请使用“下载”。",
   INSTALL_CANCEL: "取消",
+  INSTALL_NOW: "立即安装",
   CATALOGUE_FAILED: '目前无法更新目录。上次成功检查：{{date}}。',
   CATALOGUE_BUNDLED: '程序自带的目录，尚未在线更新。',
   WELCOME_TITLE: "用 Kynoko 应用打开您的文件？",
@@ -503,6 +508,7 @@ const ZH_HANT: Dict = {
   INSTALL_CANCELLED: "已取消安裝。",
   INSTALL_FAILED: "無法安裝（{{error}}）。請使用「下載」。",
   INSTALL_CANCEL: "取消",
+  INSTALL_NOW: "立即安裝",
   CATALOGUE_FAILED: '目前無法更新目錄。上次成功檢查：{{date}}。',
   CATALOGUE_BUNDLED: '程式隨附的目錄，尚未在線上更新。',
   WELCOME_TITLE: "用 Kynoko 應用程式開啟您的檔案？",
@@ -588,6 +594,7 @@ const AR: Dict = {
   INSTALL_CANCELLED: "أُلغي التثبيت.",
   INSTALL_FAILED: "تعذّر التثبيت ({{error}}). استخدم «تنزيل».",
   INSTALL_CANCEL: "إلغاء",
+  INSTALL_NOW: "التثبيت الآن",
   CATALOGUE_FAILED: 'لا يمكن تحديث الكتالوج حاليًا. آخر تحقق ناجح: {{date}}.',
   CATALOGUE_BUNDLED: 'الكتالوج المرفق بالبرنامج، لم يُحدَّث عبر الإنترنت بعد.',
   WELCOME_TITLE: "هل تريد فتح ملفاتك بتطبيقات Kynoko؟",

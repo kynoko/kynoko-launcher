@@ -72,7 +72,9 @@ button.name {
 }
 button.name .label { display: flex; flex-direction: column; line-height: 1.2; white-space: nowrap; }
 button.name .open { font-size: 0.78rem; font-weight: 600; color: var(--kynoko-primary); }
-button.name:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.3); background: rgba(var(--kynoko-glow-rgb), 0.08); color: var(--kynoko-primary); }
+/* Hovered: the ground lights up; the app's name only takes a hint of the
+   theme (all of it read as too loud), its "Open" keeps the theme's colour. */
+button.name:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.3); background: rgba(var(--kynoko-glow-rgb), 0.08); color: color-mix(in srgb, var(--kynoko-primary) 22%, var(--kynoko-text)); }
 .app-icon { inline-size: 32px; block-size: 32px; border-radius: var(--kynoko-radius-xs); flex: none; }
 
 /* A section of the card: its own line; its content in a tinted, faceted body. */

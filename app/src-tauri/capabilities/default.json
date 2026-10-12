@@ -26,6 +26,7 @@
     "allow-update-download",
     "allow-update-install",
     "allow-update-cancel",
+    "allow-update-now",
     "allow-set-assistant"
   ]
 }
