@@ -835,7 +835,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-11 | AI assistants installed on the computer use the Kynoko apps over MCP (section 19): `kynoko-launcher mcp` is a pipe between the assistant's standard input and output and the agent, which it starts when none runs; the agent answers the protocol (dual era, 2026-07-28 and the handshake versions before it) with the tools each app declares in its manifest, and relays each call to a window of the app it opens for the assistant, in the app's browser, at a `#kynokoAutomation=` fragment; the page asks its user first, runs the call in its own engine and history, and its Stop keeps the assistant out of the app for 10 minutes. One loopback WebSocket listener for pages and assistants alike, guarded like the bridge (exact Host, exact Origin for a page, a token in the state folder and no Origin for an assistant). The window's "AI assistants" switches add Kynoko to the configuration of Claude Desktop, LM Studio, Cursor, Qwen Code, VS Code and Codex (only our entry, the rest kept, a file with comments left alone, a copy kept aside), inventoried, so removed on reset and uninstall. No tray icon yet; one loopback WebSocket rather than a Tauri channel for the Kynoko window too. |
 | 2026-10-12 | Seen with Claude Desktop on Layout Studio: two calls sent together, before the user had answered, opened two windows, each asking the user. A call now finds the window opened for the app a moment ago and waits for it; `kynoko_open` finds the window already open instead of always opening one. The apps' "AI assistants" entry opens the window on that section: `kynoko-launcher://settings?app=<code>&section=assistants` (skeleton v0.111.0, `kynokoOpenLauncher(code, 'assistants')`); a link names only a section the window knows, and an older launcher shows the app. |
 | 2026-10-12 | Asked for by the user: the update moves to the top of the window, condensed (the version beside the name, "Up to date" and the catalogue's date beside "Check now", a newer version's card of one line under the lead), and the window checks by itself when it shows, at most once an hour, never while hidden (section 13). Still no automatic install. |
-| 2026-10-13 | Proposed, asked for by the user, not built: the launcher signs in to Kynoko once (OAuth with PKCE, redirect to 127.0.0.1, a rotating device token in the system's credential store) and hands the sign-in to every browser it opens an app in, through a one-time code of 60 seconds that the platform's API exchanges for an ordinary browser session before sending the browser on to the app (section 20). Without it, each browser (the Kynoko window, Firefox, Chrome, each profile) needs its own sign-in. Platform side: `backend/specifications/LAUNCHER_SIGN_IN.md` of the platform repository. |
+| 2026-10-13 | Proposed, asked for by the user, not built: the launcher signs in to Kynoko once (OAuth with PKCE, redirect to 127.0.0.1, a rotating device token in the system's credential store) and hands the sign-in to every browser it opens an app in, through a one-time code of 60 seconds that the platform's API exchanges for an ordinary browser session before sending the browser on to the app (section 20). Decided the same day: the launcher signs in in a Kynoko window, device token 90 days sliding (one year at most), windows opened for an assistant signed in too, Android later. Without it, each browser (the Kynoko window, Firefox, Chrome, each profile) needs its own sign-in. Platform side: `backend/specifications/LAUNCHER_SIGN_IN.md` of the platform repository. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol
@@ -961,7 +961,8 @@ user's files.
 
 ## 20. The Kynoko account: the sign-in carried to the browsers
 
-Status: **proposed 2026-10-13, not built.** The platform side (authorization
+Status: **proposed 2026-10-13, decided the same day (see "Decisions"),
+not built.** The platform side (authorization
 server, device tokens, codes, the exchange, revocation) is specified in the
 platform repository, `backend/specifications/LAUNCHER_SIGN_IN.md`; this
 section is the launcher's part.
@@ -977,15 +978,21 @@ whenever a session expires in one of them.
 ### What the launcher does
 
 - **Signing in, once per computer.** The window's "Kynoko account" section
-  offers "Sign in". The launcher opens the system's DEFAULT browser at
+  offers "Sign in". The launcher opens a KYNOKO WINDOW (decided 2026-10-13;
+  its own engine, the one its apps open in) at
   `https://kynoko.com/oauth/authorize` (public client `kynoko-launcher`, PKCE
-  S256, `state`, `redirect_uri` `http://127.0.0.1:<random port>/callback`),
-  never a password form in a window of its own (RFC 8252). The user signs in
-  there (nothing to type when that browser is signed in already) and allows
-  "Kynoko Launcher on <computer name>". The loopback listener takes the one
-  redirect it waits for (exact path, matching `state`, then closes), and the
-  launcher exchanges the code for an access token (10 minutes) and a device
-  token (rotating refresh token).
+  S256, `state`, `redirect_uri` `https://kynoko.com/oauth/launcher-callback`).
+  The user signs in there with Kynoko's own page (TOTP, passkeys) and allows
+  "Kynoko Launcher on <computer name>"; the Kynoko windows are signed in at
+  the same stroke, since the page runs in their profile. The window's
+  navigation handler catches the redirect to the callback address (it never
+  loads it), checks `state`, closes the window, and the launcher exchanges the
+  code and its `code_verifier` for an access token (10 minutes) and a device
+  token (rotating refresh token). RFC 8252 prefers the system's browser for
+  fear of a THIRD-PARTY app reading the credentials typed into it; the
+  launcher is Kynoko's own, and the window it signs in is where the user
+  works most. What it gives up: the browser's password manager (passkeys
+  work in WebView2 and WKWebView; WebKitGTK to check).
 - **Keeping it.** The device token goes to the system's credential store, and
   nowhere else: Windows Credential Manager (DPAPI), the macOS Keychain, the
   Secret Service on Linux. Without a store (a Linux session without one), the
@@ -1040,8 +1047,8 @@ A "Kynoko account" line at the top, under the update line (section 13):
 signed out, "Sign in to open your apps signed in, in every browser" and a
 "Sign in" button; signed in, the account's name and e-mail address, "Sign
 out", and a line on what it does ("Your apps open signed in, in every browser
-Kynoko Launcher opens them in"). While the browser sign-in is under way:
-"Finish signing in in your browser" and Cancel.
+Kynoko Launcher opens them in"). While the sign-in window is open: "Finish
+signing in in the window that opened" and Cancel (which closes it).
 
 ### Isolated runs and dev
 
@@ -1050,14 +1057,12 @@ store: it keeps the device token in memory only. The platform's address is
 `https://api.kynoko.com/` and `https://kynoko.com/`, overridable in settings
 (`accountApiUrl`, `accountUrl`) for the dev platform.
 
-### To decide (with the platform side)
+### Decisions (2026-10-13)
 
-1. The launcher's sign-in in the default browser (recommended, RFC 8252) or in
-   a Kynoko window.
-2. Lifetimes: device token 90 days sliding, one year at most; code 60 s.
-3. The same-IP check between the code's request and its exchange
-   (recommended; a VPN in the browser alone falls back to the ordinary
-   sign-in).
-4. Windows opened for an assistant signed in too (recommended: the page asks
-   the user already).
-5. Android: the same, later, with the Keystore.
+1. The launcher signs in in a Kynoko window, not the default browser.
+2. Device token: 90 days sliding, one year at most; code: 60 seconds.
+3. The same-IP check between a code's request and its exchange: strict (IPv4
+   equal, IPv6 in the same /64), its refusals counted by the platform, eased
+   if they prove a nuisance (proposed, awaiting the user's agreement).
+4. Windows opened for an assistant are signed in too.
+5. Android: the same later, with the Keystore.
