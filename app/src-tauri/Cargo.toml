@@ -33,6 +33,12 @@ sha2 = "0.10"
 # The system's "Save as" dialog (MIT). Linux: through the XDG desktop portal,
 # loaded at run time; nothing to install to build.
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+# The Kynoko account's device token, in the system's credential store
+# (account.rs): Windows Credential Manager, the macOS Keychain, the Secret
+# Service on Linux (MIT or Apache-2.0).
+keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust"] }
+# The computer's name, as the account's device list shows it (MIT or Apache-2.0).
+gethostname = "0.5"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

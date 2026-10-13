@@ -19,6 +19,10 @@ h1 { font-size: 1.35rem; margin: 0 0 4px; }
 .top .status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .top .status .note { margin: 0; }
 .catalogue-note { margin: -12px 0 16px; }
+/* The Kynoko account, under the lead: what it gives and its one button. */
+.account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: -10px 0 18px; }
+.account-line .note { margin: 0; flex: 1; min-inline-size: 16em; }
+.account-note { margin: -12px 0 16px; }
 h2 { font-size: 1rem; margin: 26px 0 10px; }
 
 .card {

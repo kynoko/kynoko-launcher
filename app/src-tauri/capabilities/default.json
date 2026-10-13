@@ -27,6 +27,9 @@
     "allow-update-install",
     "allow-update-cancel",
     "allow-update-now",
-    "allow-set-assistant"
+    "allow-set-assistant",
+    "allow-account-sign-in",
+    "allow-account-cancel",
+    "allow-account-sign-out"
   ]
 }

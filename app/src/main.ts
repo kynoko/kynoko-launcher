@@ -44,6 +44,8 @@ interface State {
   shown: boolean;
   /** Assistants connected right now. */
   assistantsOnline: number;
+  /** The Kynoko account (docs/SPEC.md, section 20). */
+  account: { signedIn: boolean; pending: boolean; email: string | null; name: string | null; notKept: boolean };
 }
 interface AssistantView { id: string; name: string; installed: boolean; connected: boolean }
 
@@ -471,6 +473,7 @@ function topOf(state: State): HTMLElement[] {
       el('span', { class: 'status' }, el('span', { class: 'note' }, words.join(' · ')), button)),
     el('p', { class: 'lead' }, t(lang, 'LEAD')),
   ];
+  top.push(accountLine(state));
   if (c?.newer && c.latest) top.push(updateCard(c));
   // Said quietly, with the last success: never a notification.
   const last = state.catalogueChecked ? new Date(state.catalogueChecked * 1000).toLocaleString(lang) : null;
@@ -480,6 +483,44 @@ function topOf(state: State): HTMLElement[] {
     : null;
   if (trouble) top.push(el('p', { class: 'note catalogue-note' }, trouble));
   return top;
+}
+
+/** Why the last sign-in did not end signed in, until the next attempt. */
+let accountNote: string | null = null;
+
+/**
+ * The Kynoko account (docs/SPEC.md, section 20), one line under the lead:
+ * signed out, what signing in gives and "Sign in"; while the sign-in window
+ * is open, where to finish and Cancel; signed in, who and "Sign out".
+ */
+function accountLine(state: State): HTMLElement {
+  const a = state.account;
+  const line = el('div', { class: 'account-line' });
+  if (a.pending) {
+    const cancel = el('button', { type: 'button' }, t(lang, 'ACCOUNT_CANCEL'));
+    cancel.addEventListener('click', () => void run(() => invoke('account_cancel')));
+    line.append(el('span', { class: 'note' }, t(lang, 'ACCOUNT_PENDING')), cancel);
+  } else if (a.signedIn) {
+    const out = el('button', { type: 'button' }, t(lang, 'ACCOUNT_SIGN_OUT'));
+    out.addEventListener('click', () => {
+      out.disabled = true;
+      void run(() => invoke('account_sign_out'));
+    });
+    const who = a.email ? t(lang, 'ACCOUNT_SIGNED_IN', { account: a.email }) : t(lang, 'ACCOUNT_SIGNED_IN_ANON');
+    line.append(el('span', { class: 'note' }, `${who} ${t(lang, 'ACCOUNT_CARRIES')}`), out);
+  } else {
+    const signIn = el('button', { type: 'button', class: 'primary' }, t(lang, 'ACCOUNT_SIGN_IN'));
+    signIn.addEventListener('click', () => {
+      accountNote = null;
+      void run(() => invoke('account_sign_in'));
+    });
+    line.append(el('span', { class: 'note' }, t(lang, 'ACCOUNT_SIGNED_OUT')), signIn);
+  }
+  const notes: string[] = [];
+  if (a.signedIn && a.notKept) notes.push(t(lang, 'ACCOUNT_NOT_KEPT'));
+  if (accountNote && !a.signedIn && !a.pending) notes.push(accountNote);
+  if (!notes.length) return line;
+  return el('div', {}, line, ...notes.map((n) => el('p', { class: 'note account-note', role: 'status' }, n)));
 }
 
 /**
@@ -685,6 +726,12 @@ async function render(): Promise<void> {
 // The window was asked for (started, or an app's menu entry): show that
 // app, and check for a newer version if that was not done in the last hour.
 void listen('focus-app', () => { void render(); void autoCheck(); });
+// The Kynoko account changed (signed in, out, the sign-in window closed).
+void listen('account-changed', () => void render());
+void listen<string>('account-error', (e) => {
+  accountNote = e.payload === 'access_denied' ? t(lang, 'ACCOUNT_DENIED') : t(lang, 'ACCOUNT_FAILED', { error: e.payload });
+  void render();
+});
 // The catalogue changed in the background: show the new one.
 void listen('catalogue-updated', () => void render());
 // Something written in the background (the first start's shortcuts): show it.

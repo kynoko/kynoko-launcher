@@ -14,6 +14,7 @@
 //! instance), so one AGENT owns the bridge. The agent lives while files are
 //! open and quits by itself once none is and no window is shown.
 
+mod account;
 mod assistants;
 mod assoc;
 mod automation;
@@ -187,7 +188,12 @@ struct Shared {
     /// update_install is closing the Kynoko windows and waiting: the idle
     /// watch must not quit before the installer is started.
     update_running: std::sync::atomic::AtomicBool,
+    /// The Kynoko account (docs/SPEC.md, section 20).
+    account: account::Account,
 }
+
+/// The Kynoko account's sign-in window (section 20).
+const SIGN_IN_WINDOW: &str = "account-sign-in";
 
 impl Shared {
     fn catalogue(&self) -> Catalogue {
@@ -364,6 +370,13 @@ fn remember_reached(key: String) {
 /// not been seen reaching the launcher (the gateway, and for a file the app
 /// too), the gateway opens in an ordinary window, where the prompt is sure
 /// to show; the next time is an app window.
+///
+/// Signed in to the Kynoko account (section 20), the browser is first handed
+/// the sign-in: the address opened is the platform's exchange, which sets the
+/// browser's own session and sends it on to the app. That asks the platform
+/// for a code (2 seconds at most), so it runs off the caller's thread (a
+/// launch comes from the window's own); past the wait, the app opens as
+/// before. The browser's keys (Settings::loopback_ok) stay the APP's origin.
 fn open_page(
     shared: &Shared,
     settings: &Settings,
@@ -373,18 +386,46 @@ fn open_page(
     url: &str,
     with_file: bool,
 ) -> Result<(), String> {
+    if !shared.account.signed_in() {
+        return open_page_at(shared, settings, app, browser, profile, url, url, with_file);
+    }
+    let handle = shared.handle.get().cloned().ok_or("the launcher is not started yet")?;
+    let (mut settings, app, url) = (settings.clone(), app.clone(), url.to_string());
+    thread::spawn(move || {
+        let shared = handle.state::<Shared>();
+        let opened = shared.account.carry(&mut settings, &url);
+        if let Err(e) = open_page_at(&shared, &settings, &app, browser, profile, &url, &opened, with_file) {
+            eprintln!("kynoko-launcher: cannot open {}: {e}", app.code);
+        }
+    });
+    Ok(())
+}
+
+/// open_page, with the address to open (`opened`) apart from the app's
+/// (`url`, whose origin names the browser's permission).
+#[allow(clippy::too_many_arguments)]
+fn open_page_at(
+    shared: &Shared,
+    settings: &Settings,
+    app: &App,
+    browser: Option<browsers::Browser>,
+    profile: Option<String>,
+    url: &str,
+    opened: &str,
+    with_file: bool,
+) -> Result<(), String> {
     if browser.as_ref().is_some_and(|b| b.engine == browsers::Engine::Embedded) {
-        return open_embedded(shared, settings, app, url);
+        return open_embedded(shared, settings, app, opened);
     }
     let b = match browser {
         Some(b) if cfg!(windows) && b.engine == browsers::Engine::Gecko => b,
-        other => return launch::open(url, other.as_ref(), profile.as_deref()).map_err(|e| e.to_string()),
+        other => return launch::open(opened, other.as_ref(), profile.as_deref()).map_err(|e| e.to_string()),
     };
     let gateway = settings.gateway();
     let gateway_key = reach_key(&b, profile.as_deref(), &origin_of(&gateway));
     let app_key = reach_key(&b, profile.as_deref(), &origin_of(url));
     let handoff = shared.handoff(&origin_of(&gateway))?;
-    handoff.push(url.to_string(), gateway_key.clone());
+    handoff.push(opened.to_string(), gateway_key.clone());
     // The launcher stays up until the gateway has asked.
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
     let proven = settings.loopback_ok.contains(&gateway_key) && (!with_file || settings.loopback_ok.contains(&app_key));
@@ -397,6 +438,10 @@ fn open_page(
 }
 
 fn cleanup(keep_preferences: bool) -> Result<(), String> {
+    // Signed out first: a launcher taken away leaves no credential behind,
+    // and the platform's device list loses it.
+    let mut settings = Settings::load();
+    account::forget(&mut settings);
     let mut inventory = Inventory::load();
     assoc::remove_all(&mut inventory).map_err(|e| e.to_string())?;
     if keep_preferences {
@@ -831,6 +876,86 @@ fn watch_idle(app: AppHandle) {
     });
 }
 
+/* ------------------------------------------------------- Kynoko account */
+
+/// "Sign in" (section 20): a Kynoko window on the platform's consent. It
+/// shows the platform's pages only (anything else goes to the system's
+/// browser), catches the redirect, which it never loads, and closes; the
+/// launcher trades the code for its tokens. The page runs in the Kynoko
+/// windows' profile: they are signed in at the same stroke.
+#[tauri::command]
+fn account_sign_in(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let shared = app.state::<Shared>();
+    let settings = Settings::load();
+    let url = shared.account.begin(&settings, &app.package_info().version.to_string());
+    let target = url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+    let handle = app.clone();
+    thread::spawn(move || {
+        let caught = handle.clone();
+        let built = tauri::WebviewWindowBuilder::new(&handle, SIGN_IN_WINDOW, tauri::WebviewUrl::External(target))
+            .title("Kynoko")
+            .inner_size(520.0, 760.0)
+            .focused(true)
+            .on_navigation(move |u| {
+                let settings = Settings::load();
+                if account::Account::is_redirect(&settings, u.as_str()) {
+                    let done = caught.clone();
+                    let redirect = u.to_string();
+                    thread::spawn(move || {
+                        let shared = done.state::<Shared>();
+                        let mut settings = Settings::load();
+                        let outcome = shared.account.finish(&mut settings, &redirect);
+                        if let Some(w) = done.get_webview_window(SIGN_IN_WINDOW) {
+                            let _ = w.close();
+                        }
+                        if let Err(e) = outcome {
+                            let _ = done.emit("account-error", e);
+                        }
+                        let _ = done.emit("account-changed", ());
+                    });
+                    return false;
+                }
+                if account::may_show(&settings, u) || u.scheme() == "about" {
+                    return true;
+                }
+                let _ = launch::open(u.as_str(), None, None);
+                false
+            })
+            .build();
+        if let Err(e) = built {
+            eprintln!("kynoko-launcher: cannot open the sign-in window: {e}");
+        }
+    });
+    Ok(())
+}
+
+/// The sign-in window's Cancel.
+#[tauri::command]
+fn account_cancel(app: AppHandle) {
+    app.state::<Shared>().account.cancel();
+    if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
+        let _ = w.close();
+    }
+}
+
+/// "Sign out": the device token revoked and forgotten (a request to the
+/// platform: off the window's thread).
+#[tauri::command]
+async fn account_sign_out(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut settings = Settings::load();
+        app.state::<Shared>().account.sign_out(&mut settings);
+        let _ = app.emit("account-changed", ());
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /* ------------------------------------------------------------ window API */
 
 #[derive(Serialize)]
@@ -896,6 +1021,8 @@ struct StateView {
     /// files or assistants, and its page cannot tell (the web engine says
     /// "visible" either way).
     shown: bool,
+    /// The Kynoko account (section 20).
+    account: account::AccountView,
 }
 
 #[derive(Serialize)]
@@ -1001,6 +1128,7 @@ fn get_state(app: AppHandle, shared: tauri::State<'_, Shared>, lang: String) -> 
         assistants: assistants::views(),
         assistant_snippet: assistants::snippet(),
         assistants_online: shared.automation.lock().expect("automation lock").as_ref().map(|a| a.clients()).unwrap_or(0),
+        account: shared.account.view(&settings),
         shown: app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false),
     }
 }
@@ -1735,6 +1863,7 @@ pub fn run() {
             update_cancel: std::sync::atomic::AtomicBool::new(false),
             update_now: std::sync::atomic::AtomicBool::new(false),
             update_running: std::sync::atomic::AtomicBool::new(false),
+            account: account::Account::default(),
         })
         .invoke_handler(tauri::generate_handler![
             get_state,
@@ -1768,7 +1897,10 @@ pub fn run() {
             update_install,
             update_cancel,
             update_now,
-            set_assistant
+            set_assistant,
+            account_sign_in,
+            account_cancel,
+            account_sign_out
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -1828,6 +1960,11 @@ pub fn run() {
             }
             if let tauri::WindowEvent::Destroyed = event {
                 let shared = window.state::<Shared>();
+                if window.label() == SIGN_IN_WINDOW {
+                    // Closed before the end: that sign-in is over.
+                    shared.account.cancel();
+                    let _ = window.app_handle().emit("account-changed", ());
+                }
                 shared.guarded.lock().expect("lock").remove(window.label());
                 shared.close_asked.lock().expect("lock").remove(window.label());
                 shared.close_allowed.lock().expect("lock").remove(window.label());

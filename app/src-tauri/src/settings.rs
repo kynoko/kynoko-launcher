@@ -41,6 +41,15 @@ pub struct Settings {
     /// None = https://launch.kynoko.com/. For testing against another
     /// environment.
     pub gateway_url: Option<String>,
+    /// The platform's front and API for the Kynoko account (docs/SPEC.md,
+    /// section 20); None = https://kynoko.com/ and https://api.kynoko.com/.
+    /// For testing against another environment.
+    pub account_url: Option<String>,
+    pub account_api_url: Option<String>,
+    /// Who the launcher is signed in as, for the window to say so. Display
+    /// only: the device token is in the system's credential store, never here.
+    pub account_email: Option<String>,
+    pub account_name: Option<String>,
     /// `<browser>|<profile>|<origin>`: that origin has reached the launcher
     /// from that browser profile, so the browser's permission is granted.
     /// Until then Firefox gets an ordinary window, where its permission
