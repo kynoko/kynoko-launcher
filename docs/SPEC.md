@@ -776,6 +776,8 @@ catalogue in the system's language, falling back to English.
    token, never the path), and sharing the protocol code with Kynoko's remote
    gateway, which serves the assistants that only accept remote servers
    (ChatGPT, Mistral Vibe Work).
+8. **The sign-in carried to the browsers** (section 20, proposed): the
+   questions it leaves to decide are listed at its end.
 
 ## 17. Phases
 
@@ -833,6 +835,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-11 | AI assistants installed on the computer use the Kynoko apps over MCP (section 19): `kynoko-launcher mcp` is a pipe between the assistant's standard input and output and the agent, which it starts when none runs; the agent answers the protocol (dual era, 2026-07-28 and the handshake versions before it) with the tools each app declares in its manifest, and relays each call to a window of the app it opens for the assistant, in the app's browser, at a `#kynokoAutomation=` fragment; the page asks its user first, runs the call in its own engine and history, and its Stop keeps the assistant out of the app for 10 minutes. One loopback WebSocket listener for pages and assistants alike, guarded like the bridge (exact Host, exact Origin for a page, a token in the state folder and no Origin for an assistant). The window's "AI assistants" switches add Kynoko to the configuration of Claude Desktop, LM Studio, Cursor, Qwen Code, VS Code and Codex (only our entry, the rest kept, a file with comments left alone, a copy kept aside), inventoried, so removed on reset and uninstall. No tray icon yet; one loopback WebSocket rather than a Tauri channel for the Kynoko window too. |
 | 2026-10-12 | Seen with Claude Desktop on Layout Studio: two calls sent together, before the user had answered, opened two windows, each asking the user. A call now finds the window opened for the app a moment ago and waits for it; `kynoko_open` finds the window already open instead of always opening one. The apps' "AI assistants" entry opens the window on that section: `kynoko-launcher://settings?app=<code>&section=assistants` (skeleton v0.111.0, `kynokoOpenLauncher(code, 'assistants')`); a link names only a section the window knows, and an older launcher shows the app. |
 | 2026-10-12 | Asked for by the user: the update moves to the top of the window, condensed (the version beside the name, "Up to date" and the catalogue's date beside "Check now", a newer version's card of one line under the lead), and the window checks by itself when it shows, at most once an hour, never while hidden (section 13). Still no automatic install. |
+| 2026-10-13 | Proposed, asked for by the user, not built: the launcher signs in to Kynoko once (OAuth with PKCE, redirect to 127.0.0.1, a rotating device token in the system's credential store) and hands the sign-in to every browser it opens an app in, through a one-time code of 60 seconds that the platform's API exchanges for an ordinary browser session before sending the browser on to the app (section 20). Without it, each browser (the Kynoko window, Firefox, Chrome, each profile) needs its own sign-in. Platform side: `backend/specifications/LAUNCHER_SIGN_IN.md` of the platform repository. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol
@@ -955,3 +958,106 @@ first change, the file as it was is copied beside it
 (`assistantEntry`): "Reset everything" and the uninstaller take it out. An
 isolated run (`KYNOKO_LAUNCHER_HOME`) works in `<home>/home` and never in the
 user's files.
+
+## 20. The Kynoko account: the sign-in carried to the browsers
+
+Status: **proposed 2026-10-13, not built.** The platform side (authorization
+server, device tokens, codes, the exchange, revocation) is specified in the
+platform repository, `backend/specifications/LAUNCHER_SIGN_IN.md`; this
+section is the launcher's part.
+
+### Why
+
+The Kynoko session is a cookie (`shared_domain_jwt`, on `.kynoko.com`), and a
+cookie belongs to one browser. The launcher opens each app in the browser
+chosen for it: the Kynoko window for one, Firefox or Chrome (and a profile)
+for another. Without help, the user signs in once per browser, and again
+whenever a session expires in one of them.
+
+### What the launcher does
+
+- **Signing in, once per computer.** The window's "Kynoko account" section
+  offers "Sign in". The launcher opens the system's DEFAULT browser at
+  `https://kynoko.com/oauth/authorize` (public client `kynoko-launcher`, PKCE
+  S256, `state`, `redirect_uri` `http://127.0.0.1:<random port>/callback`),
+  never a password form in a window of its own (RFC 8252). The user signs in
+  there (nothing to type when that browser is signed in already) and allows
+  "Kynoko Launcher on <computer name>". The loopback listener takes the one
+  redirect it waits for (exact path, matching `state`, then closes), and the
+  launcher exchanges the code for an access token (10 minutes) and a device
+  token (rotating refresh token).
+- **Keeping it.** The device token goes to the system's credential store, and
+  nowhere else: Windows Credential Manager (DPAPI), the macOS Keychain, the
+  Secret Service on Linux. Without a store (a Linux session without one), the
+  launcher says that it cannot remember the sign-in and keeps it for the run
+  only; it never writes it to a file. The access token lives in memory.
+- **Handing it over.** Each time the launcher opens an app page (`launch`, a
+  file, an assistant's window; in any browser, the Kynoko window included),
+  it first asks the platform for a sign-in code for that address (`POST
+  /api/launcher/sign-in-code`, `{ "to": <the address without its fragment> }`)
+  and opens the address the platform answers instead,
+  `https://api.kynoko.com/launcher/sign-in?code=...&to=...`, with the app
+  address's fragment (`#kynokoBridge=`, `#kynokoAutomation=`,
+  `kynokoLauncher=1`) appended to it: the API sets the browser's own session
+  and sends it on (303) to the app, and the browser carries the fragment
+  through the redirect (a `Location` without one inherits the request's, RFC
+  9110 section 10.2.2), so the platform never sees it. The code is one-time,
+  valid 60 seconds, bound to the app's origin and to the public IP address of
+  the request. It costs the opening one request to the platform before, and
+  one redirect after. The Firefox
+  gateway (section 5) is handed that address like any other: it navigates to
+  any `https://*.kynoko.com/` address.
+- **Never in the way.** No code when the user is not signed in to the
+  launcher, when the address is not an app of the catalogue (an `appUrls`
+  override to another host, except the platform's dev host), or when the
+  platform does not answer within 2 seconds: the app opens as today, and
+  offers its own sign-in. The launcher waits for nothing else.
+- **Rotation.** Each use of the device token replaces it, written back to the
+  store before the new access token is used. A device token refused as
+  already used (the platform's theft detection) or revoked signs the
+  launcher out, quietly: the "Kynoko account" section says so and offers
+  "Sign in" again.
+- **Signing out.** "Sign out" revokes the device token (`POST /oauth/revoke`)
+  and removes it from the store. The browsers keep their sessions (ordinary
+  ones), unless the user ticks "and in the browsers it signed me in to".
+  "Reset everything" and the uninstaller sign out too (inventory entry
+  `launcherSignIn`).
+
+### What it never does
+
+- It exposes no local endpoint that hands out a code or a token: a web page
+  can ask it for nothing. It asks for a code only to open, itself, an app of
+  the catalogue.
+- It never sees the browser's cookie or the session JWT: only its device
+  token, its access token and one-time codes.
+- It never replaces a browser's session by another account's: the platform
+  leaves a browser signed in as someone else untouched.
+- It logs no token and no code.
+
+### The window
+
+A "Kynoko account" line at the top, under the update line (section 13):
+signed out, "Sign in to open your apps signed in, in every browser" and a
+"Sign in" button; signed in, the account's name and e-mail address, "Sign
+out", and a line on what it does ("Your apps open signed in, in every browser
+Kynoko Launcher opens them in"). While the browser sign-in is under way:
+"Finish signing in in your browser" and Cancel.
+
+### Isolated runs and dev
+
+An isolated run (`KYNOKO_LAUNCHER_HOME`) never reads or writes the system's
+store: it keeps the device token in memory only. The platform's address is
+`https://api.kynoko.com/` and `https://kynoko.com/`, overridable in settings
+(`accountApiUrl`, `accountUrl`) for the dev platform.
+
+### To decide (with the platform side)
+
+1. The launcher's sign-in in the default browser (recommended, RFC 8252) or in
+   a Kynoko window.
+2. Lifetimes: device token 90 days sliding, one year at most; code 60 s.
+3. The same-IP check between the code's request and its exchange
+   (recommended; a VPN in the browser alone falls back to the ordinary
+   sign-in).
+4. Windows opened for an assistant signed in too (recommended: the page asks
+   the user already).
+5. Android: the same, later, with the Keystore.
