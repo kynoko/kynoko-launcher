@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-indesign-versions"
+description = "Enables the indesign_versions command without any pre-configured scope."
+commands.allow = ["indesign_versions"]
+
+[[permission]]
+identifier = "deny-indesign-versions"
+description = "Denies the indesign_versions command without any pre-configured scope."
+commands.deny = ["indesign_versions"]

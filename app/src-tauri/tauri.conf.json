@@ -54,7 +54,16 @@
     },
     "macOS": {
       "signingIdentity": "-",
-      "infoPlist": "Info.mac.plist"
+      "infoPlist": "Info.mac.plist",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "macos/en.lproj/InfoPlist.strings",
+        "Resources/fr.lproj/InfoPlist.strings": "macos/fr.lproj/InfoPlist.strings",
+        "Resources/es.lproj/InfoPlist.strings": "macos/es.lproj/InfoPlist.strings",
+        "Resources/ja.lproj/InfoPlist.strings": "macos/ja.lproj/InfoPlist.strings",
+        "Resources/zh-Hans.lproj/InfoPlist.strings": "macos/zh-Hans.lproj/InfoPlist.strings",
+        "Resources/zh-Hant.lproj/InfoPlist.strings": "macos/zh-Hant.lproj/InfoPlist.strings",
+        "Resources/ar.lproj/InfoPlist.strings": "macos/ar.lproj/InfoPlist.strings"
+      }
     }
   }
 }

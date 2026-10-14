@@ -614,6 +614,32 @@ in `0-template`, then adopted by Office, Photo Studio and Media Studio.
   answer within 2 s (frozen, or an app from before the guard) does not keep
   its window open. The bar's own cross asks the same question before it
   closes.
+- **InDesign documents** (Layout Studio, `indesign.rs`): an InDesign document
+  (.indd) is InDesign's own database, closed and different in every version.
+  Only InDesign reads it, and its IDML export is what a layout app imports.
+  In a Kynoko window, `indesign_versions` lists the InDesign versions of the
+  computer, newest first (`{ major, release }`: 14 and "CC 2019"), so that
+  the page can tell whether one opens the document it holds (an InDesign
+  opens its own version's documents and older ones). `indesign_convert`
+  takes the bytes of a document as the request's raw body (1 GiB at most) and
+  answers the bytes of its IDML, exported by the newest InDesign, with the
+  user's own licence: the document never leaves the computer. The page names
+  no file and sends no code: the script InDesign runs is the launcher's (open
+  the document without a window, export it as IDML, close it without saving,
+  InDesign's dialogs held back meanwhile). An InDesign started for the
+  conversion is quit afterwards; one already open keeps the user's documents
+  as they were. One conversion at a time, in a folder of its own in the
+  system's temporary directory, removed afterwards. A refusal is one word the
+  page puts in its own words: `none`, `busy`, `too-large`, `unavailable`
+  (InDesign did not start), `denied` (macOS: the user refused), `unreadable`
+  (saved by a later InDesign, or damaged), `timeout`, `failed`. Windows
+  drives InDesign's COM server (`InDesign.Application.<release>`) through
+  Windows PowerShell, by its full path, the paths and the ProgID in its
+  environment, never in its code. macOS drives InDesign's scripting from
+  `osascript` in JavaScript for Automation, which macOS lets through once the
+  user has allowed it: the bundle says why (`NSAppleEventsUsageDescription`,
+  in the 7 languages, `tools/mac-info-plist.mjs`). Linux has no InDesign: the
+  list is empty there, as on a computer without one.
 
 ## 11. Install, uninstall, cleanup
 
@@ -778,6 +804,11 @@ catalogue in the system's language, falling back to English.
    (ChatGPT, Mistral Vibe Work).
 8. **The sign-in carried to the browsers** (section 20, proposed): the
    questions it leaves to decide are listed at its end.
+9. **InDesign on macOS** (section 10, *InDesign documents*): the
+   `osascript` driver and the Apple events prompt are written, and only
+   Windows has been tested end to end (InDesign 2019: a document converted,
+   an InDesign started for it quit, one already open left with its
+   documents). Needs a Mac with InDesign before a release.
 
 ## 17. Phases
 
@@ -836,6 +867,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-12 | Seen with Claude Desktop on Layout Studio: two calls sent together, before the user had answered, opened two windows, each asking the user. A call now finds the window opened for the app a moment ago and waits for it; `kynoko_open` finds the window already open instead of always opening one. The apps' "AI assistants" entry opens the window on that section: `kynoko-launcher://settings?app=<code>&section=assistants` (skeleton v0.111.0, `kynokoOpenLauncher(code, 'assistants')`); a link names only a section the window knows, and an older launcher shows the app. |
 | 2026-10-12 | Asked for by the user: the update moves to the top of the window, condensed (the version beside the name, "Up to date" and the catalogue's date beside "Check now", a newer version's card of one line under the lead), and the window checks by itself when it shows, at most once an hour, never while hidden (section 13). Still no automatic install. |
 | 2026-10-13 | Asked for by the user, built the same day (account.rs, not yet released): the launcher signs in to Kynoko once (OAuth with PKCE, redirect to 127.0.0.1, a rotating device token in the system's credential store) and hands the sign-in to every browser it opens an app in, through a one-time code of 60 seconds that the platform's API exchanges for an ordinary browser session before sending the browser on to the app (section 20). Decided the same day: the launcher signs in in a Kynoko window, device token 90 days sliding (one year at most), windows opened for an assistant signed in too, Android later. Without it, each browser (the Kynoko window, Firefox, Chrome, each profile) needs its own sign-in. Platform side: `backend/specifications/LAUNCHER_SIGN_IN.md` of the platform repository. |
+| 2026-10-14 | Asked for by the user: the apps convert an InDesign document (.indd) with the user's own InDesign, through the launcher, in a Kynoko window (`indesign_versions`, `indesign_convert`, section 10). The launcher's script, never the page's; the document stays on the computer. A double-click on an .indd that converts before the app opens is the next step, not built. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol

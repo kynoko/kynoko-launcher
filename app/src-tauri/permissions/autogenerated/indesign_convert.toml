@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-indesign-convert"
+description = "Enables the indesign_convert command without any pre-configured scope."
+commands.allow = ["indesign_convert"]
+
+[[permission]]
+identifier = "deny-indesign-convert"
+description = "Denies the indesign_convert command without any pre-configured scope."
+commands.deny = ["indesign_convert"]

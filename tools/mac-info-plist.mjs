@@ -8,10 +8,17 @@
  *   for types it declares, and it reads them from the bundle: a type added
  *   to the catalogue later needs a new build (docs/SPEC.md, section 7).
  * - CFBundleURLTypes: the kynoko-launcher:// scheme.
+ * - NSAppleEventsUsageDescription: why the launcher drives InDesign
+ *   (indesign.rs). Without it, macOS refuses the Apple events without asking
+ *   the user. The sentence is shown in the user's language: the bundle holds
+ *   one InfoPlist.strings per language (app/src-tauri/macos/<lang>.lproj,
+ *   written here too, copied into Contents/Resources by tauri.conf.json
+ *   bundle.macOS.files), and the languages are declared
+ *   (CFBundleLocalizations).
  *
  * Usage: node tools/mac-info-plist.mjs   (reads app/src-tauri/catalogue.json)
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +26,17 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, '..', 'app', 'src-tauri');
 const catalogue = JSON.parse(readFileSync(join(dir, 'catalogue.json'), 'utf8'));
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Why the launcher sends Apple events to InDesign, in the 7 languages (the macOS lproj names). */
+const APPLE_EVENTS = {
+  en: 'When an app asks it to, Kynoko Launcher has InDesign export an InDesign document as IDML, so that the app can open it.',
+  fr: "À la demande d'une app, Kynoko Launcher fait exporter par InDesign un document InDesign en IDML, pour que l'app puisse l'ouvrir.",
+  es: 'A petición de una app, Kynoko Launcher hace que InDesign exporte un documento de InDesign como IDML, para que la app pueda abrirlo.',
+  ja: 'アプリから求められたとき、Kynoko Launcher は InDesign に InDesign ドキュメントを IDML として書き出させ、アプリで開けるようにします。',
+  'zh-Hans': '应应用的请求，Kynoko Launcher 会让 InDesign 将 InDesign 文档导出为 IDML，以便该应用打开。',
+  'zh-Hant': '應 App 的要求，Kynoko Launcher 會讓 InDesign 將 InDesign 文件轉存為 IDML，以便該 App 開啟。',
+  ar: 'بطلب من أحد التطبيقات، يجعل Kynoko Launcher برنامج InDesign يُصدّر مستند InDesign بصيغة IDML، كي يتمكن التطبيق من فتحه.',
+};
 
 const types = catalogue.apps
   .map((app) => {
@@ -56,8 +74,19 @@ ${types}
         <key>CFBundleURLSchemes</key><array><string>kynoko-launcher</string></array>
       </dict>
     </array>
+    <key>NSAppleEventsUsageDescription</key><string>${esc(APPLE_EVENTS.en)}</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>${Object.keys(APPLE_EVENTS).map((l) => `<string>${l}</string>`).join('')}</array>
   </dict>
 </plist>
 `;
 writeFileSync(join(dir, 'Info.mac.plist'), plist);
+
+// The same sentence in each language, where macOS looks for it.
+for (const [lang, text] of Object.entries(APPLE_EVENTS)) {
+  const folder = join(dir, 'macos', `${lang}.lproj`);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, 'InfoPlist.strings'), `"NSAppleEventsUsageDescription" = ${JSON.stringify(text)};\n`);
+}
 console.log(`Info.mac.plist: ${catalogue.apps.length} apps, scheme kynoko-launcher`);

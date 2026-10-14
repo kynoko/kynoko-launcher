@@ -6,6 +6,20 @@
     <key>CFBundleDocumentTypes</key>
     <array>
       <dict>
+        <key>CFBundleTypeName</key><string>Media Studio</string>
+        <key>CFBundleTypeRole</key><string>Editor</string>
+        <key>LSHandlerRank</key><string>Alternate</string>
+        <key>CFBundleTypeExtensions</key>
+        <array><string>mp4</string><string>mov</string><string>mkv</string><string>webm</string><string>avi</string><string>m4v</string><string>ts</string><string>flv</string><string>wmv</string><string>3gp</string><string>ogv</string><string>mxf</string><string>mp3</string><string>wav</string><string>flac</string><string>ogg</string><string>m4a</string><string>aac</string><string>opus</string><string>kymed</string></array>
+      </dict>
+      <dict>
+        <key>CFBundleTypeName</key><string>Photo Studio</string>
+        <key>CFBundleTypeRole</key><string>Editor</string>
+        <key>LSHandlerRank</key><string>Alternate</string>
+        <key>CFBundleTypeExtensions</key>
+        <array><string>jpg</string><string>jpeg</string><string>png</string><string>webp</string><string>tif</string><string>tiff</string><string>psd</string><string>kypho</string></array>
+      </dict>
+      <dict>
         <key>CFBundleTypeName</key><string>Kynoko Office</string>
         <key>CFBundleTypeRole</key><string>Editor</string>
         <key>LSHandlerRank</key><string>Alternate</string>
@@ -13,18 +27,11 @@
         <array><string>docx</string><string>doc</string><string>odt</string><string>fodt</string><string>rtf</string><string>txt</string><string>md</string><string>html</string><string>htm</string><string>xlsx</string><string>xls</string><string>ods</string><string>fods</string><string>csv</string><string>tsv</string><string>pptx</string><string>ppt</string><string>odp</string><string>fodp</string></array>
       </dict>
       <dict>
-        <key>CFBundleTypeName</key><string>Photo Studio</string>
+        <key>CFBundleTypeName</key><string>PDF Editor</string>
         <key>CFBundleTypeRole</key><string>Editor</string>
         <key>LSHandlerRank</key><string>Alternate</string>
         <key>CFBundleTypeExtensions</key>
-        <array><string>jpg</string><string>jpeg</string><string>png</string><string>webp</string><string>tif</string><string>tiff</string><string>psd</string><string>kphoto</string></array>
-      </dict>
-      <dict>
-        <key>CFBundleTypeName</key><string>Media Studio</string>
-        <key>CFBundleTypeRole</key><string>Editor</string>
-        <key>LSHandlerRank</key><string>Alternate</string>
-        <key>CFBundleTypeExtensions</key>
-        <array><string>mp4</string><string>mov</string><string>mkv</string><string>webm</string><string>avi</string><string>m4v</string><string>ts</string><string>flv</string><string>wmv</string><string>3gp</string><string>ogv</string><string>mxf</string><string>mp3</string><string>wav</string><string>flac</string><string>ogg</string><string>m4a</string><string>aac</string><string>opus</string></array>
+        <array><string>pdf</string></array>
       </dict>
     </array>
     <key>NSAppTransportSecurity</key>
@@ -38,5 +45,9 @@
         <key>CFBundleURLSchemes</key><array><string>kynoko-launcher</string></array>
       </dict>
     </array>
+    <key>NSAppleEventsUsageDescription</key><string>When an app asks it to, Kynoko Launcher has InDesign export an InDesign document as IDML, so that the app can open it.</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array><string>en</string><string>fr</string><string>es</string><string>ja</string><string>zh-Hans</string><string>zh-Hant</string><string>ar</string></array>
   </dict>
 </plist>

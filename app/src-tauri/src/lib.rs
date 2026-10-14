@@ -24,6 +24,7 @@ mod catalogue;
 mod dialog;
 mod fonts;
 mod handoff;
+mod indesign;
 mod launch;
 mod mcp;
 mod mcp_stdio;
@@ -623,6 +624,35 @@ async fn system_font_file(id: u32) -> Result<tauri::ipc::Response, String> {
         .await
         .map_err(|e| e.to_string())??;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+// InDesign, for a Kynoko window's page (capability "kynoko-window"; the
+// policy is in indesign.rs): which versions this computer has, and the IDML
+// of an InDesign document the page holds, exported by the user's own
+// InDesign. The page sends the document's bytes and gets the IDML's: it
+// names no file and sends no code.
+
+/// The InDesign versions of this computer, newest first: `{ major, release }`.
+#[tauri::command]
+async fn indesign_versions() -> Result<Vec<indesign::InDesign>, String> {
+    tauri::async_runtime::spawn_blocking(indesign::installed).await.map_err(|e| e.to_string())
+}
+
+/// The IDML of the InDesign document sent as the request's raw body, as the
+/// response's raw body (an ArrayBuffer in the page). Refused with one word
+/// the page puts in its own words (indesign::Refusal): none, busy, too-large,
+/// unavailable, denied, unreadable, timeout, failed.
+#[tauri::command]
+async fn indesign_convert(request: tauri::ipc::Request<'_>) -> Result<tauri::ipc::Response, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("failed".into());
+    };
+    let document = bytes.clone();
+    let idml = tauri::async_runtime::spawn_blocking(move || indesign::convert(&document))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|refusal| refusal.to_string())?;
+    Ok(tauri::ipc::Response::new(idml))
 }
 
 /// Page loads of a Kynoko window: a page that has not taken the title bar
@@ -1886,6 +1916,8 @@ pub fn run() {
             system_fonts,
             system_font_face,
             system_font_file,
+            indesign_versions,
+            indesign_convert,
             app_icon,
             set_shortcuts,
             check_catalogue,
