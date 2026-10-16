@@ -329,7 +329,7 @@ Nothing takes a file type over without that answer or the app's own switch.
 |---|---|---|
 | Windows | `HKCU\Software\Classes`: a ProgID `Kynoko.<App>.<ext>` (the facade's icon dressed as a Kynoko file, see the 2026-10-05 entry, verb `open` -> the app's own program `open-with\kynoko-<app>.exe open --app <App> "%1"`, `Application\ApplicationName` + `ApplicationIcon` for its "Open with" entry), `.<ext>\OpenWithProgids`, plus `Capabilities` + `RegisteredApplications` so that Kynoko Launcher appears in Settings > Default apps | **Cannot be set programmatically** (hashed `UserChoice`). Kynoko Launcher opens the Default apps page on its own entry and explains. |
 | macOS | Document types are **static**: the `Info.plist` of Kynoko Launcher declares every Kynoko type with `LSHandlerRank = Alternate`. Enabling an extension = making it the default | `NSWorkspace.setDefaultApplication(at:toOpenContentType:)` (may show a system confirmation) |
-| Linux | `MimeType=` of one desktop entry per facade (`kynoko-launcher-open-<App>-<facade>.desktop`, named after the app, the facade's icon dressed as a Kynoko file), a shared-mime-info XML for types the system lacks, `update-desktop-database` | `xdg-mime default` / `~/.config/mimeapps.list` |
+| Linux | `MimeType=` of one desktop entry per facade (`kynoko-launcher-open-<App>-<facade>.desktop`, named after the app, the facade's icon dressed as a Kynoko file), a shared-mime-info XML for types the system lacks, `update-desktop-database`. Kynoko's own types (`application/vnd.kynoko.*`, `application/x-kynoko-*`) also wear that icon in the file manager: copied to `~/.local/share/icons/hicolor/256x256/mimetypes/kynoko-<App>-<facade>.png` and named by `<icon>` and `<generic-icon>` in the XML (GTK tries every name in the current theme before the next one: a generic name of the current theme would win over ours), which also says what a `…+zip` type is made of (`<sub-class-of type="application/zip"/>`, so that reading the content never turns it into a plain ZIP). A common type keeps the system's icon: on Linux the icon follows the type, not the program that opens it | `xdg-mime default` / `~/.config/mimeapps.list` |
 
 On macOS, files arrive through Apple Events, not `argv` (Tauri:
 `RunEvent::Opened`).
@@ -378,6 +378,29 @@ Validated in phase 0 with Edge 154 and Firefox 156 (`spikes/loopback-bridge`).
   A missing `Origin` is refused.
 - The allowed origin is the app's origin from the catalogue (or the dev
   override). Never a wildcard.
+
+### In a Kynoko window (macOS, Linux)
+
+WebKit, the engine of a Kynoko window off Windows, blocks an https page's
+requests to `http://127.0.0.1` as mixed content (measured, WebKitGTK 2.50:
+"requested insecure content from http://127.0.0.1:…. This content was
+blocked"); the page never reaches the listener. WebView2 lets them through.
+So, for a file opened in a Kynoko window on macOS and Linux:
+
+- the fragment names the launcher's own scheme instead of the listener:
+  `#kynokoBridge=kynoko-bridge/<token>`, and the page asks
+  `kynoko-bridge://localhost/s/<token>/<endpoint>`, the same endpoints;
+- wry registers the scheme as secure in WebKit: no mixed content, no CORS
+  preflight (measured: `GET`, `PUT` with `If-Match` and a body, `Range`,
+  `Origin` present);
+- the launcher answers only its app windows, and relays each request to the
+  listener as it came (`Origin`, `If-Match`, `Range`, `Content-Type`, the
+  body), then the answer back: every rule above holds, the origin check
+  first. The engine sets `Origin`; the page cannot;
+- the page shows no "Allow" explanation first (no browser asks anything).
+
+A page accepts the host `kynoko-bridge` exactly, and no other word: in a
+browser, a link naming it only fails.
 
 ### Session
 

@@ -263,12 +263,72 @@ fn write_recorded(path: &Path, text: &str, inventory: &mut Inventory) -> std::io
 fn refresh_databases() {
     let _ = Command::new("update-mime-database").arg(data_home().join("mime")).status();
     let _ = Command::new("update-desktop-database").arg(applications()).status();
+    refresh_icons();
+}
+
+/* ------------------------------------------------------------- type icons */
+
+/// The user's own copy of the default icon theme, where a file type's icon
+/// is looked up by name (the system's hicolor lists its folders).
+fn icon_theme() -> PathBuf {
+    data_home().join("icons/hicolor")
+}
+
+/// The name a type of `app` opened by `facade` wears in the icon theme.
+fn type_icon_name(app: &App, facade: &crate::catalogue::Facade) -> String {
+    let slug: String = facade.slug().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+    format!("kynoko-{}-{slug}", app.code)
+}
+
+fn is_type_icon(app: &App, path: &str) -> bool {
+    let prefix = icon_theme().join("256x256/mimetypes").join(format!("kynoko-{}-", app.code));
+    path.starts_with(&*prefix.to_string_lossy())
+}
+
+/// A file manager looks the theme up again when its folder changes; an icon
+/// cache of the user's, if there is one, would hide a new icon: rebuilt.
+fn refresh_icons() {
+    let theme = icon_theme();
+    if theme.join("icon-theme.cache").is_file() {
+        let _ = Command::new("gtk-update-icon-cache").args(["-f", "-t", "-q"]).arg(&theme).status();
+    }
+    let touch = theme.join(".kynoko-launcher-touch");
+    if std::fs::write(&touch, b"").is_ok() {
+        let _ = std::fs::remove_file(&touch);
+    }
+}
+
+/// Kynoko's own types wear the icon of the facade that opens them (see
+/// shortcuts::file_icon), put in the user's icon theme under a name of ours
+/// and named in the MIME package: it is what a file manager shows for these
+/// files. A common type keeps the system's (see xdg::is_own_type).
+fn type_icons(app: &App, pairs: &[(String, String)], settings: &Settings, inventory: &mut Inventory) -> std::collections::BTreeMap<String, String> {
+    let mut icons = std::collections::BTreeMap::new();
+    for (mime, ext) in pairs {
+        if !xdg::is_own_type(mime) {
+            continue;
+        }
+        let Some(facade) = app.facade_for(ext) else { continue };
+        let Some(png) = crate::shortcuts::type_icon(app, facade, settings, "png", inventory) else { continue };
+        let Ok(bytes) = std::fs::read(&png) else { continue };
+        let name = type_icon_name(app, facade);
+        let themed = icon_theme().join("256x256/mimetypes").join(format!("{name}.png"));
+        if inventory.record(Artefact::File { path: themed.to_string_lossy().into_owned() }).is_err() {
+            continue;
+        }
+        let written = themed.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&themed, &bytes));
+        if written.is_ok() {
+            icons.insert(mime.clone(), name);
+        }
+    }
+    icons
 }
 
 pub fn register(app: &App, settings: &Settings, inventory: &mut Inventory) -> std::io::Result<()> {
     let pairs = types(app);
+    let icons = type_icons(app, &pairs, settings, inventory);
     let package = data_home().join("mime/packages").join(format!("kynoko-launcher-{}.xml", app.code));
-    write_recorded(&package, &xdg::mime_package(&pairs), inventory)?;
+    write_recorded(&package, &xdg::mime_package(&pairs, &icons), inventory)?;
 
     let lang = settings.ui_lang.as_deref().unwrap_or("en");
     // Each type goes to the facade it opens in: one entry per such facade.
@@ -339,7 +399,9 @@ pub fn unregister(app: &App, inventory: &mut Inventory) -> std::io::Result<()> {
                 restore_default(mime, desktop, previous.as_deref());
                 inventory.forget(&a)?;
             }
-            Artefact::File { path } if is_open_entry(app, path) || path.ends_with(&format!("kynoko-launcher-{}.xml", app.code)) => {
+            Artefact::File { path }
+                if is_open_entry(app, path) || is_type_icon(app, path) || path.ends_with(&format!("kynoko-launcher-{}.xml", app.code)) =>
+            {
                 let _ = std::fs::remove_file(path);
                 inventory.forget(&a)?;
             }

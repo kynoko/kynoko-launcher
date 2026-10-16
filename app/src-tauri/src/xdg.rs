@@ -109,7 +109,7 @@ pub fn exec_quote(arg: &str) -> String {
 
 /// A shared-mime-info package declaring each `(mime, extension)` pair: types
 /// the system already knows gain nothing but a glob, new ones exist.
-pub fn mime_package(pairs: &[(String, String)]) -> String {
+pub fn mime_package(pairs: &[(String, String)], icons: &BTreeMap<String, String>) -> String {
     let mut by_type: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for (mime, ext) in pairs {
         by_type.entry(mime).or_default().push(ext);
@@ -122,10 +122,41 @@ pub fn mime_package(pairs: &[(String, String)]) -> String {
         for ext in exts {
             out.push_str(&format!("    <glob pattern=\"*.{ext}\"/>\n"));
         }
+        if let Some(parent) = made_of(mime) {
+            out.push_str(&format!("    <sub-class-of type=\"{parent}\"/>\n"));
+        }
+        // The generic icon too: GTK tries every name in the current theme
+        // before the next theme, so a generic name the current theme has
+        // (application-x-generic) would win over ours, kept in hicolor.
+        if let Some(icon) = icons.get(mime) {
+            out.push_str(&format!("    <icon name=\"{icon}\"/>\n    <generic-icon name=\"{icon}\"/>\n"));
+        }
         out.push_str("  </mime-type>\n");
     }
     out.push_str("</mime-info>\n");
     out
+}
+
+/// A type of Kynoko's own (`application/vnd.kynoko.…`, `application/x-kynoko-…`):
+/// only Kynoko opens it, so it may wear a Kynoko icon whatever opens the
+/// common types. A common type (CSV, JPEG...) keeps the system's icon, which
+/// follows the type, not the program that opens it.
+pub fn is_own_type(mime: &str) -> bool {
+    mime.starts_with("application/vnd.kynoko.") || mime.starts_with("application/x-kynoko-")
+}
+
+/// What one of our types is made of, from its suffix (`…+zip`: a ZIP). Said
+/// in the package, so that a file manager that also reads the content (a
+/// ZIP) keeps the type its name gives: the shared-mime-info rule lets a
+/// glob win over the magic of a type it is a sub-class of.
+fn made_of(mime: &str) -> Option<&'static str> {
+    if !is_own_type(mime) {
+        return None;
+    }
+    [("+zip", "application/zip"), ("+json", "application/json"), ("+xml", "application/xml")]
+        .into_iter()
+        .find(|(suffix, _)| mime.ends_with(suffix))
+        .map(|(_, parent)| parent)
 }
 
 const DEFAULTS: &str = "[Default Applications]";
@@ -255,9 +286,27 @@ mod tests {
 
     #[test]
     fn package() {
-        let xml = mime_package(&[("text/csv".into(), "csv".into()), ("application/x-kynoko-kphoto".into(), "kphoto".into())]);
-        assert!(xml.contains("<mime-type type=\"text/csv\">\n    <glob pattern=\"*.csv\"/>"));
+        let xml = mime_package(&[("text/csv".into(), "csv".into()), ("application/x-kynoko-kphoto".into(), "kphoto".into())], &BTreeMap::new());
+        assert!(xml.contains("<mime-type type=\"text/csv\">\n    <glob pattern=\"*.csv\"/>\n  </mime-type>"));
         assert!(xml.contains("application/x-kynoko-kphoto"));
+    }
+
+    #[test]
+    fn our_types_wear_their_icon_and_say_what_they_are_made_of() {
+        let kymed = "application/vnd.kynoko.media-studio+zip".to_string();
+        let icons = BTreeMap::from([(kymed.clone(), "kynoko-MediaStudio-edit".to_string())]);
+        let xml = mime_package(&[(kymed, "kymed".into()), ("text/csv".into(), "csv".into())], &icons);
+        assert!(xml.contains(
+            "<mime-type type=\"application/vnd.kynoko.media-studio+zip\">\n    <glob pattern=\"*.kymed\"/>\n    \
+<sub-class-of type=\"application/zip\"/>\n    <icon name=\"kynoko-MediaStudio-edit\"/>\n    \
+<generic-icon name=\"kynoko-MediaStudio-edit\"/>\n  </mime-type>"
+        ));
+        // A common type is the system's: neither parent nor icon from us.
+        assert!(xml.contains("<mime-type type=\"text/csv\">\n    <glob pattern=\"*.csv\"/>\n  </mime-type>"));
+        assert!(is_own_type("application/x-kynoko-kphoto") && !is_own_type("application/zip"));
+        assert_eq!(made_of("application/vnd.kynoko.layout-studio+zip"), Some("application/zip"));
+        assert_eq!(made_of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"), None);
+        assert_eq!(made_of("application/x-kynoko-kphoto"), None);
     }
 
     #[test]

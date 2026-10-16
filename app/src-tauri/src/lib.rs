@@ -303,7 +303,9 @@ fn open_files(shared: &Shared, named: Option<&str>, files: &[PathBuf]) -> Result
         let (browser, profile) = browser_for(&settings, &app.code);
         let key = browser.as_ref().map(|b| reach_key(b, profile.as_deref(), &origin));
         let token = bridge.open(path.clone(), origin, key);
-        let url = format!("{}/open#kynokoBridge=127.0.0.1:{}/{}&{MARKER}", base.trim_end_matches('/'), bridge.port, token);
+        // A Kynoko window off Windows reaches the bridge through the launcher's scheme (bridge::SCHEME).
+        let window = browser.as_ref().is_some_and(|b| b.engine == browsers::Engine::Embedded);
+        let url = format!("{}/open#kynokoBridge={}/{}&{MARKER}", base.trim_end_matches('/'), bridge.host_for(window), token);
         open_page(shared, &settings, app, browser, profile, &url, true)?;
     }
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
@@ -1894,6 +1896,19 @@ pub fn run() {
             update_now: std::sync::atomic::AtomicBool::new(false),
             update_running: std::sync::atomic::AtomicBool::new(false),
             account: account::Account::default(),
+        })
+        // The bridge in a Kynoko window off Windows (bridge::SCHEME): asked
+        // by the app windows only, each request relayed off the window's thread.
+        .register_asynchronous_uri_scheme_protocol(bridge::SCHEME, |ctx, request, responder| {
+            let refused = |status: u16| tauri::http::Response::builder().status(status).body(Vec::new()).expect("a response");
+            if !ctx.webview_label().starts_with("app-") {
+                return responder.respond(refused(403));
+            }
+            let bridge = ctx.app_handle().state::<Shared>().bridge();
+            thread::spawn(move || match bridge {
+                Ok(bridge) => responder.respond(bridge.relay(&request)),
+                Err(_) => responder.respond(refused(503)),
+            });
         })
         .invoke_handler(tauri::generate_handler![
             get_state,

@@ -33,6 +33,17 @@ const PATIENCE_MS: [u64; 5] = [100, 200, 400, 600, 800];
 /// before them answers 405, or ignores `Range`).
 const FEATURES: [&str; 3] = ["range", "append", "save-as"];
 
+/// The bridge's address in a Kynoko window on macOS and Linux (docs/SPEC.md,
+/// section 8, "In a Kynoko window"). WebKit, their engine, blocks an https
+/// page's requests to `http://127.0.0.1` as mixed content; a scheme of the
+/// launcher's own, which wry registers as secure, it lets through. The page
+/// is told `kynokoBridge=kynoko-bridge/<token>` and asks
+/// `kynoko-bridge://localhost/s/<token>/...`; each request is relayed to the
+/// listener as it came, its `Origin` included (see relay), so every rule of
+/// the listener holds. Windows keeps the listener: WebView2 lets loopback
+/// requests through.
+pub const SCHEME: &str = "kynoko-bridge";
+
 /// What the system's "Save as" dialog is asked to show: the folder it opens
 /// in, the name it suggests, the file type it offers (without its dot).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,6 +106,71 @@ impl Bridge {
             .expect("sessions lock")
             .insert(token.clone(), Session { path, origin, last_seen: Instant::now(), key, copy: None });
         token
+    }
+
+    /// The host a page is told in `kynokoBridge=<host>/<token>`: the listener,
+    /// or the launcher's own scheme for a Kynoko window off Windows (see SCHEME).
+    pub fn host_for(&self, kynoko_window: bool) -> String {
+        if kynoko_window && !cfg!(windows) {
+            SCHEME.to_string()
+        } else {
+            format!("127.0.0.1:{}", self.port)
+        }
+    }
+
+    /// One request of a Kynoko window's page to `kynoko-bridge://localhost/s/...`,
+    /// relayed to the listener with what it reads (`Origin`, `If-Match`,
+    /// `Range`, `Content-Type`) and its body; its answer comes back as it is.
+    /// The engine sets `Origin`, the page cannot: the listener's origin check
+    /// stays the guard. Blocking (a "Save as" waits on the user): to be called
+    /// off the thread that serves the window.
+    pub fn relay(&self, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+        let plain = |status: u16, text: &str| {
+            tauri::http::Response::builder()
+                .status(status)
+                .header("Content-Type", "text/plain")
+                .body(text.as_bytes().to_vec())
+                .expect("a plain response")
+        };
+        let uri = request.uri();
+        if uri.host() != Some("localhost") {
+            return plain(421, "misdirected host");
+        }
+        let target = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/");
+        if !target.starts_with("/s/") {
+            return plain(404, "not found");
+        }
+        let agent = ureq::AgentBuilder::new().redirects(0).build();
+        let method = request.method().as_str();
+        let mut call = agent.request(method, &format!("http://127.0.0.1:{}{target}", self.port));
+        for name in ["Origin", "If-Match", "Range", "Content-Type"] {
+            if let Some(value) = request.headers().get(name).and_then(|v| v.to_str().ok()) {
+                call = call.set(name, value);
+            }
+        }
+        let answer = match method {
+            "GET" | "HEAD" | "OPTIONS" => call.call(),
+            _ => call.send_bytes(request.body()),
+        };
+        let answer = match answer {
+            Ok(r) | Err(ureq::Error::Status(_, r)) => r,
+            Err(e) => return plain(502, &format!("bridge unreachable: {e}")),
+        };
+        let mut out = tauri::http::Response::builder().status(answer.status());
+        for name in answer.headers_names() {
+            // The connection's own headers stay with the connection.
+            if ["connection", "transfer-encoding", "keep-alive", "server", "date"].contains(&name.to_ascii_lowercase().as_str()) {
+                continue;
+            }
+            for value in answer.all(&name) {
+                out = out.header(name.as_str(), value);
+            }
+        }
+        let mut body = Vec::new();
+        if let Err(e) = answer.into_reader().read_to_end(&mut body) {
+            return plain(502, &format!("bridge answer cut: {e}"));
+        }
+        out.body(body).unwrap_or_else(|e| plain(502, &format!("bridge answer unreadable: {e}")))
     }
 
     /// Sessions still alive (expired ones are dropped on the way).
@@ -1243,6 +1319,82 @@ mod tests {
         assert_eq!(status, 204);
         assert!(start.elapsed() < Duration::from_millis(800), "{:?}", start.elapsed());
         assert_eq!(saving.join().unwrap(), 200);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /* A Kynoko window off Windows: the launcher's scheme, relayed. */
+
+    /// A request as WebKit hands it to the scheme's handler.
+    fn through_scheme(bridge: &Bridge, method: &str, url: &str, headers: &[(&str, &str)], body: &[u8]) -> tauri::http::Response<Vec<u8>> {
+        let mut request = tauri::http::Request::builder().method(method).uri(url);
+        for (k, v) in headers {
+            request = request.header(*k, *v);
+        }
+        bridge.relay(&request.body(body.to_vec()).unwrap())
+    }
+
+    fn head<'a>(r: &'a tauri::http::Response<Vec<u8>>, name: &str) -> Option<&'a str> {
+        r.headers().get(name).and_then(|v| v.to_str().ok())
+    }
+
+    #[test]
+    fn a_kynoko_window_off_windows_is_told_the_scheme() {
+        let bridge = Bridge::start(|_| {}, never_asked()).unwrap();
+        assert_eq!(bridge.host_for(false), format!("127.0.0.1:{}", bridge.port));
+        let window = if cfg!(windows) { format!("127.0.0.1:{}", bridge.port) } else { SCHEME.to_string() };
+        assert_eq!(bridge.host_for(true), window);
+    }
+
+    /// Everything a page does through the listener, it does through the
+    /// scheme: read whole and in part, write against its tag, keep alive,
+    /// close; and the listener's refusals come back as they are.
+    #[test]
+    fn the_scheme_relays_the_bridge_as_it_is() {
+        let dir = scratch("scheme");
+        let file = dir.join("notes.csv");
+        fs::write(&file, "a;b\n1;2\n").unwrap();
+        let (bridge, base) = serve(&file, never_asked());
+        let token = base.rsplit('/').next().unwrap().to_string();
+        let at = |route: &str| format!("{SCHEME}://localhost/s/{token}{route}");
+        let page = [("Origin", ORIGIN)];
+
+        let meta = through_scheme(&bridge, "GET", &at("/meta"), &page, b"");
+        assert_eq!(meta.status(), 200);
+        assert_eq!(head(&meta, "Access-Control-Allow-Origin"), Some(ORIGIN));
+        let meta: serde_json::Value = serde_json::from_slice(meta.body()).unwrap();
+        assert_eq!(meta["name"], "notes.csv");
+        let tag = meta["etag"].as_str().unwrap().to_string();
+
+        let whole = through_scheme(&bridge, "GET", &at("/content"), &page, b"");
+        assert_eq!((whole.status().as_u16(), whole.body().as_slice()), (200, &b"a;b\n1;2\n"[..]));
+        assert_eq!(head(&whole, "ETag"), Some(tag.as_str()));
+
+        let part = through_scheme(&bridge, "GET", &at("/content"), &[("Origin", ORIGIN), ("Range", "bytes=4-6")], b"");
+        assert_eq!((part.status().as_u16(), part.body().as_slice()), (206, &b"1;2"[..]));
+        assert_eq!(head(&part, "Content-Range"), Some("bytes 4-6/8"));
+
+        let stale = through_scheme(&bridge, "PUT", &at("/content"), &[("Origin", ORIGIN), ("If-Match", "\"0-0\"")], b"x");
+        assert_eq!(stale.status(), 412);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "a;b\n1;2\n");
+
+        let written = through_scheme(&bridge, "PUT", &at("/content"), &[("Origin", ORIGIN), ("If-Match", &tag)], b"a;b\n3;4\n");
+        assert_eq!(written.status(), 200);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "a;b\n3;4\n");
+        assert_ne!(head(&written, "ETag"), Some(tag.as_str()));
+
+        assert_eq!(through_scheme(&bridge, "POST", &at("/heartbeat"), &page, b"").status(), 204);
+
+        // Another origin, no origin, another token: refused, as by the listener.
+        assert_eq!(through_scheme(&bridge, "GET", &at("/meta"), &[("Origin", "https://evil.example")], b"").status(), 403);
+        assert_eq!(through_scheme(&bridge, "GET", &at("/meta"), &[], b"").status(), 403);
+        let other = format!("{SCHEME}://localhost/s/{}/meta", "0".repeat(64));
+        assert_eq!(through_scheme(&bridge, "GET", &other, &page, b"").status(), 404);
+        // Nothing but sessions, nothing but localhost.
+        assert_eq!(through_scheme(&bridge, "GET", &format!("{SCHEME}://localhost/"), &page, b"").status(), 404);
+        assert_eq!(through_scheme(&bridge, "GET", &format!("{SCHEME}://elsewhere/s/{token}/meta"), &page, b"").status(), 421);
+
+        assert_eq!(through_scheme(&bridge, "DELETE", &at(""), &page, b"").status(), 204);
+        assert_eq!(through_scheme(&bridge, "GET", &at("/meta"), &page, b"").status(), 404);
         fs::remove_dir_all(&dir).unwrap();
     }
 }
