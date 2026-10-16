@@ -447,29 +447,54 @@ pub fn main_entry(app: &App) -> String {
     applications().join(format!("kynoko-{}.desktop", app.code)).to_string_lossy().into_owned()
 }
 
-/// One desktop entry per kept item, in the "Kynoko" submenu (category
-/// X-Kynoko, see ensure_menu).
-pub fn write_shortcut(app: &App, item: &crate::shortcuts::Item, icon: Option<&Path>, inventory: &mut Inventory) -> std::io::Result<()> {
+fn entry_slug(slug: &str) -> String {
+    slug.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+}
+
+/// One desktop entry of the "Kynoko" submenu (category X-Kynoko, see
+/// ensure_menu): an app, its kept facades as the entry's actions (a right
+/// click shows them) and their names as keywords (searching "Tableur" finds
+/// Kynoko Office); or a facade kept without its app, alone.
+pub fn write_shortcut(
+    app: &App,
+    item: &crate::shortcuts::Item,
+    icon: Option<&Path>,
+    facades: &[(&crate::shortcuts::Item, Option<PathBuf>)],
+    inventory: &mut Inventory,
+) -> std::io::Result<()> {
     let path = if item.slug.is_empty() {
         PathBuf::from(main_entry(app))
     } else {
-        let slug: String = item.slug.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
-        applications().join(format!("kynoko-{}--{slug}.desktop", app.code))
+        applications().join(format!("kynoko-{}--{}.desktop", app.code, entry_slug(&item.slug)))
     };
+    let launch = |target: &str| format!("{} launch {target}", xdg::exec_quote(&exe()));
     let mut fields = vec![
         ("Type", "Application".to_string()),
         ("Name", item.name.clone()),
-        ("Exec", format!("{} launch {}", xdg::exec_quote(&exe()), item.target)),
+        ("Exec", launch(&item.target)),
         ("Categories", "X-Kynoko;".to_string()),
     ];
     if let Some(png) = icon {
         fields.push(("Icon", png.to_string_lossy().into_owned()));
     }
+    if !facades.is_empty() {
+        let words: String = facades.iter().map(|(f, _)| format!("{};", f.short.replace(';', " "))).collect();
+        fields.push(("Keywords", words));
+    }
+    let actions: Vec<xdg::Action> = facades
+        .iter()
+        .map(|(f, png)| xdg::Action {
+            id: entry_slug(&f.slug),
+            name: f.short.clone(),
+            exec: launch(&f.target),
+            icon: png.as_ref().map(|p| p.to_string_lossy().into_owned()),
+        })
+        .collect();
     inventory.record(Artefact::Shortcut { path: path.to_string_lossy().into_owned(), app: app.code.clone() })?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(&path, xdg::render_entry(&fields, &[]))
+    std::fs::write(&path, xdg::render_entry(&fields, &actions))
 }
 
 fn config_home() -> PathBuf {

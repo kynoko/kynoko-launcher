@@ -6,7 +6,7 @@ export type Lang = 'fr' | 'en' | 'es' | 'ja' | 'zh-Hans' | 'zh-Hant' | 'ar';
 
 type Dict = Record<
   | 'LEAD' | 'BROWSER_TITLE' | 'DEFAULT_BROWSER' | 'USUAL_PROFILE' | 'PROFILE_FOR' | 'SYSTEM_DEFAULT' | 'FOLLOW_DEFAULT' | 'NO_BROWSERS' | 'EMBEDDED' | 'EMBEDDED_HINT' | 'NO_APP_MODE' | 'RECOMMENDED_GROUP' | 'OTHER_BROWSERS' | 'LIMITS_WITH' | 'RECOMMEND_INSTALL'
-  | 'APPS_TITLE' | 'ASSOCIATE' | 'SETTINGS_FOR' | 'SUMMARY_FILES' | 'SUMMARY_SHORTCUTS' | 'COUNT_OF' | 'NONE' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUT_ITEMS_WINDOWS' | 'SHORTCUT_ITEMS_MACOS' | 'SHORTCUT_ITEMS_LINUX' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
+  | 'APPS_TITLE' | 'ASSOCIATE' | 'SETTINGS_FOR' | 'SUMMARY_FILES' | 'SUMMARY_SHORTCUTS' | 'COUNT_OF' | 'NONE' | 'TYPES_FOR' | 'TYPES_HINT' | 'ALL_TYPES' | 'NO_TYPES' | 'SHORTCUT_ITEMS_WINDOWS' | 'SHORTCUT_ITEMS_MACOS' | 'SHORTCUT_ITEMS_LINUX' | 'SHORTCUTS_LINUX_HINT' | 'OPEN_APP' | 'OPEN' | 'BROWSER_FOR' | 'DEFAULT_APPS_NOTE' | 'DEFAULT_APPS_BUTTON'
   | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_FAILED' | 'APP_NEWER' | 'UPDATE_NONE' | 'UPDATE_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'INSTALL_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED'
   | 'ACCOUNT_SIGNED_OUT' | 'ACCOUNT_SIGN_IN' | 'ACCOUNT_PENDING' | 'ACCOUNT_CANCEL' | 'ACCOUNT_SIGNED_IN' | 'ACCOUNT_SIGNED_IN_ANON' | 'ACCOUNT_CARRIES' | 'ACCOUNT_SIGN_OUT' | 'ACCOUNT_NOT_KEPT' | 'ACCOUNT_DENIED' | 'ACCOUNT_FAILED'
   | 'WELCOME_TITLE' | 'WELCOME_DEFAULT' | 'WELCOME_WINDOWS' | 'WELCOME_ASSOCIATE' | 'WELCOME_LATER'
@@ -44,6 +44,7 @@ const FR: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "Raccourcis dans le menu Démarrer",
   SHORTCUT_ITEMS_MACOS: "Raccourcis dans le dossier Applications",
   SHORTCUT_ITEMS_LINUX: "Raccourcis dans le menu des applications",
+  SHORTCUTS_LINUX_HINT: "Une seule entrée par app dans le menu : les outils cochés s'affichent d'un clic droit sur elle.",
   OPEN_APP: 'Ouvrir {{app}}',
   OPEN: "Ouvrir",
   BROWSER_FOR: 'Navigateur de {{app}}',
@@ -137,6 +138,7 @@ const EN: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "Shortcuts in the Start menu",
   SHORTCUT_ITEMS_MACOS: "Shortcuts in the Applications folder",
   SHORTCUT_ITEMS_LINUX: "Shortcuts in the applications menu",
+  SHORTCUTS_LINUX_HINT: "One entry per app in the menu: the ticked tools show on a right-click on it.",
   OPEN_APP: 'Open {{app}}',
   OPEN: "Open",
   BROWSER_FOR: 'Browser for {{app}}',
@@ -230,6 +232,7 @@ const ES: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "Accesos directos en el menú Inicio",
   SHORTCUT_ITEMS_MACOS: "Accesos directos en la carpeta Aplicaciones",
   SHORTCUT_ITEMS_LINUX: "Accesos directos en el menú de aplicaciones",
+  SHORTCUTS_LINUX_HINT: "Una sola entrada por app en el menú: las herramientas marcadas aparecen al hacer clic derecho en ella.",
   OPEN_APP: 'Abrir {{app}}',
   OPEN: "Abrir",
   BROWSER_FOR: 'Navegador de {{app}}',
@@ -323,6 +326,7 @@ const JA: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "スタートメニューのショートカット",
   SHORTCUT_ITEMS_MACOS: "アプリケーションフォルダのショートカット",
   SHORTCUT_ITEMS_LINUX: "アプリケーションメニューのショートカット",
+  SHORTCUTS_LINUX_HINT: "メニューにはアプリごとに1項目だけ表示されます。チェックしたツールは、その項目を右クリックすると表示されます。",
   OPEN_APP: '{{app}} を開く',
   OPEN: "開く",
   BROWSER_FOR: '{{app}} のブラウザー',
@@ -416,6 +420,7 @@ const ZH_HANS: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "“开始”菜单中的快捷方式",
   SHORTCUT_ITEMS_MACOS: "“应用程序”文件夹中的快捷方式",
   SHORTCUT_ITEMS_LINUX: "应用程序菜单中的快捷方式",
+  SHORTCUTS_LINUX_HINT: "菜单中每个应用只有一个条目：勾选的工具在右键单击该条目时显示。",
   OPEN_APP: '打开 {{app}}',
   OPEN: "打开",
   BROWSER_FOR: '{{app}} 的浏览器',
@@ -509,6 +514,7 @@ const ZH_HANT: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "「開始」功能表中的捷徑",
   SHORTCUT_ITEMS_MACOS: "「應用程式」檔案夾中的捷徑",
   SHORTCUT_ITEMS_LINUX: "應用程式選單中的捷徑",
+  SHORTCUTS_LINUX_HINT: "選單中每個應用程式只有一個項目：勾選的工具會在按右鍵點選該項目時顯示。",
   OPEN_APP: '開啟 {{app}}',
   OPEN: "開啟",
   BROWSER_FOR: '{{app}} 的瀏覽器',
@@ -602,6 +608,7 @@ const AR: Dict = {
   SHORTCUT_ITEMS_WINDOWS: "الاختصارات في قائمة ابدأ",
   SHORTCUT_ITEMS_MACOS: "الاختصارات في مجلد التطبيقات",
   SHORTCUT_ITEMS_LINUX: "الاختصارات في قائمة التطبيقات",
+  SHORTCUTS_LINUX_HINT: "لكل تطبيق إدخال واحد فقط في القائمة: تظهر الأدوات المحددة عند النقر بزر الفأرة الأيمن عليه.",
   OPEN_APP: 'فتح {{app}}',
   OPEN: "فتح",
   BROWSER_FOR: 'متصفح {{app}}',

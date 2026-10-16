@@ -528,14 +528,31 @@ fn icon_png(manifest_url: &str, name: &str, inventory: &mut Inventory) -> Option
     Some(path)
 }
 
-/// Linux: a desktop entry per kept item, gathered under a "Kynoko" submenu
-/// where the desktop reads merged menus (KDE, Xfce, MATE, Cinnamon).
+/// Linux: ONE desktop entry per app under a "Kynoko" submenu (where the
+/// desktop reads merged menus: Cinnamon, KDE, Xfce, MATE), its kept facades
+/// as the entry's actions, offered on a right click (Cinnamon, GNOME, KDE).
+/// Not a submenu per app: Cinnamon, mintmenu, Whisker, GNOME's Applications
+/// Menu and Kickoff flatten a deeper level into its parent (KDE's Kicker
+/// alone shows it), so eighteen facades made a long list. A facade kept
+/// without its app keeps an entry of its own.
 #[cfg(target_os = "linux")]
 pub fn create(app: &App, settings: &Settings, lang: &str, inventory: &mut Inventory) -> std::io::Result<()> {
     crate::linux::ensure_menu(inventory)?;
-    for item in chosen(app, settings, lang) {
-        let png = icon_png(&item.manifest, &icon_name(app, &item), inventory);
-        crate::linux::write_shortcut(app, &item, png.as_deref(), inventory)?;
+    let items = chosen(app, settings, lang);
+    let (main, facades): (Vec<&Item>, Vec<&Item>) = items.iter().partition(|i| i.key.is_empty());
+    let with_icon = |item: &Item, inventory: &mut Inventory| icon_png(&item.manifest, &icon_name(app, item), inventory);
+    match main.first() {
+        Some(main) => {
+            let png = with_icon(main, inventory);
+            let actions: Vec<(&Item, Option<PathBuf>)> = facades.iter().map(|f| (*f, with_icon(f, inventory))).collect();
+            crate::linux::write_shortcut(app, main, png.as_deref(), &actions, inventory)?;
+        }
+        None => {
+            for item in facades {
+                let png = with_icon(item, inventory);
+                crate::linux::write_shortcut(app, item, png.as_deref(), &[], inventory)?;
+            }
+        }
     }
     crate::linux::refresh_menus();
     Ok(())

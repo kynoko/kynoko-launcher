@@ -116,6 +116,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Only for the install notes the release page shows (body_path below).
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
       - uses: actions/download-artifact@v4
         with:
           path: out
@@ -128,4 +132,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*
+          # How to install each file (the AppImage must be made executable first).
+          body_path: .github/release-install.md
           generate_release_notes: true

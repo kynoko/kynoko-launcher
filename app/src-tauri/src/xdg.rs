@@ -83,16 +83,29 @@ pub fn program_of(argv: &[String]) -> String {
 }
 
 /// A desktop entry, keys written in a fixed order.
-pub fn render_entry(fields: &[(&str, String)], actions: &[(String, String, String)]) -> String {
+/// One action of a desktop entry (`[Desktop Action <id>]`): what a right
+/// click on the entry offers in the desktop's menu.
+pub struct Action {
+    /// Letters, digits and dashes.
+    pub id: String,
+    pub name: String,
+    pub exec: String,
+    pub icon: Option<String>,
+}
+
+pub fn render_entry(fields: &[(&str, String)], actions: &[Action]) -> String {
     let mut out = String::from("[Desktop Entry]\n");
     for (k, v) in fields {
         out.push_str(&format!("{k}={v}\n"));
     }
     if !actions.is_empty() {
-        let ids: Vec<&str> = actions.iter().map(|(id, _, _)| id.as_str()).collect();
+        let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         out.push_str(&format!("Actions={};\n", ids.join(";")));
-        for (id, name, exec) in actions {
-            out.push_str(&format!("\n[Desktop Action {id}]\nName={name}\nExec={exec}\n"));
+        for a in actions {
+            out.push_str(&format!("\n[Desktop Action {}]\nName={}\nExec={}\n", a.id, a.name, a.exec));
+            if let Some(icon) = &a.icon {
+                out.push_str(&format!("Icon={icon}\n"));
+            }
         }
     }
     out

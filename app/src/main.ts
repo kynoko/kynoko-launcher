@@ -298,6 +298,8 @@ function shortcutsOf(app: AppView, os: string): HTMLElement {
   const section = el('section', { class: 'section' }, el('div', { class: 'section-head' }, toggle));
   if (!open) return section;
   const body = el('div', { class: 'section-body shortcut-list', id: bodyId, role: 'group', ariaLabel: title });
+  // Linux: one menu entry per app, its tools on a right click (see shortcuts.rs).
+  if (os === 'linux' && app.shortcutItems.length > 1) body.append(el('p', { class: 'note' }, t(lang, 'SHORTCUTS_LINUX_HINT')));
   for (const item of app.shortcutItems) {
     body.append(tickOf(item.on, item.name, item.key ? 'shortcut' : 'shortcut main',
       (on) => void run(() => invoke('set_shortcut_item', { code: app.code, key: item.key, on, lang }))));
