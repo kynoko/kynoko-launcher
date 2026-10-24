@@ -19,6 +19,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
+use crate::h264;
 use crate::ondisk;
 
 /// A session with no request for this long is over (the page heartbeats every 30 s).
@@ -70,10 +71,26 @@ struct Session {
     copy: Option<PathBuf>,
 }
 
+/// A page of an app the launcher opened, file or not (`/a/<token>/`): the
+/// services that are about no file (see h264). Bound to the app's origin as
+/// a file session is.
+struct AppSession {
+    origin: String,
+    last_seen: Instant,
+    /// Whether the page has asked anything yet. Until it has, the session
+    /// does not keep the agent up: every app gets one, few use it, and an app
+    /// that never reaches the bridge must not keep the launcher running for
+    /// ten minutes.
+    reached: bool,
+    /// The session's film conversion, the last one asked for.
+    job: Option<h264::Job>,
+}
+
 #[derive(Clone)]
 pub struct Bridge {
     pub port: u16,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
+    apps: Arc<Mutex<HashMap<String, AppSession>>>,
     on_reached: fn(String),
     choose: Chooser,
 }
@@ -88,7 +105,13 @@ impl Bridge {
             .to_ip()
             .map(|a| a.port())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no ip listener"))?;
-        let bridge = Bridge { port, sessions: Arc::new(Mutex::new(HashMap::new())), on_reached, choose };
+        let bridge = Bridge {
+            port,
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            apps: Arc::new(Mutex::new(HashMap::new())),
+            on_reached,
+            choose,
+        };
         let serving = bridge.clone();
         thread::spawn(move || {
             for request in server.incoming_requests() {
@@ -105,6 +128,17 @@ impl Bridge {
             .lock()
             .expect("sessions lock")
             .insert(token.clone(), Session { path, origin, last_seen: Instant::now(), key, copy: None });
+        token
+    }
+
+    /// Opens an app session for pages of `origin`; returns its token, told
+    /// to the page as `kynokoService=<host>/<token>`.
+    pub fn open_app(&self, origin: String) -> String {
+        let token = random_token();
+        self.apps
+            .lock()
+            .expect("apps lock")
+            .insert(token.clone(), AppSession { origin, last_seen: Instant::now(), reached: false, job: None });
         token
     }
 
@@ -137,7 +171,7 @@ impl Bridge {
             return plain(421, "misdirected host");
         }
         let target = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/");
-        if !target.starts_with("/s/") {
+        if !target.starts_with("/s/") && !target.starts_with("/a/") {
             return plain(404, "not found");
         }
         let agent = ureq::AgentBuilder::new().redirects(0).build();
@@ -173,11 +207,18 @@ impl Bridge {
         out.body(body).unwrap_or_else(|e| plain(502, &format!("bridge answer unreadable: {e}")))
     }
 
-    /// Sessions still alive (expired ones are dropped on the way).
+    /// Sessions still alive (expired ones are dropped on the way, an app
+    /// session's conversion with it). An app session counts once its page
+    /// has reached the bridge (see AppSession::reached).
     pub fn live(&self) -> usize {
-        let mut sessions = self.sessions.lock().expect("sessions lock");
-        sessions.retain(|_, s| s.last_seen.elapsed() < SESSION_IDLE);
-        sessions.len()
+        let files = {
+            let mut sessions = self.sessions.lock().expect("sessions lock");
+            sessions.retain(|_, s| s.last_seen.elapsed() < SESSION_IDLE);
+            sessions.len()
+        };
+        let mut apps = self.apps.lock().expect("apps lock");
+        apps.retain(|_, s| s.last_seen.elapsed() < SESSION_IDLE);
+        files + apps.values().filter(|s| s.reached).count()
     }
 
     fn handle(&self, req: Request) {
@@ -190,6 +231,9 @@ impl Bridge {
         let url = req.url().to_string();
         let mut parts = url.trim_start_matches('/').splitn(3, '/');
         let (scope, token, rest) = (parts.next(), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+        if scope == Some("a") {
+            return self.handle_app(req, token, origin, rest);
+        }
 
         // Find the session, and check the origin against IT: a token is only
         // ever valid for the app it was opened for.
@@ -258,6 +302,122 @@ impl Bridge {
             }
             _ => reply(req, &allowed, 405, "method not allowed", &[]),
         }
+    }
+
+    /// A request of an app session (`/a/<token>/...`): the services given to
+    /// a page about no file. Same guards as a file session: an unknown token
+    /// gets a bare 404, another origin a bare 403.
+    fn handle_app(&self, req: Request, token: &str, origin: Option<String>, rest: &str) {
+        let found = {
+            let apps = self.apps.lock().expect("apps lock");
+            apps.iter().find(|(t, _)| same(t, token)).map(|(t, s)| (t.clone(), s.origin.clone()))
+        };
+        let Some((token, allowed)) = found else {
+            let _ = req.respond(Response::from_string("not found").with_status_code(404));
+            return;
+        };
+        if origin.as_deref() != Some(allowed.as_str()) {
+            let _ = req.respond(Response::from_string("forbidden origin").with_status_code(403));
+            return;
+        }
+        if let Some(session) = self.apps.lock().expect("apps lock").get_mut(&token) {
+            session.last_seen = Instant::now();
+            session.reached = true;
+        }
+
+        if *req.method() == Method::Options {
+            let mut extra = vec![
+                ("Access-Control-Allow-Methods", "GET, POST, DELETE".to_string()),
+                ("Access-Control-Allow-Headers", "Content-Type".to_string()),
+                ("Access-Control-Max-Age", "600".to_string()),
+            ];
+            if header(&req, "Access-Control-Request-Private-Network").is_some() {
+                extra.push(("Access-Control-Allow-Private-Network", "true".to_string()));
+            }
+            return reply(req, &allowed, 204, "", &extra);
+        }
+
+        let json = || ("Content-Type", "application/json".to_string());
+        let (route, query) = rest.split_once('?').unwrap_or((rest, ""));
+        match (req.method().clone(), route) {
+            (Method::Get, "meta") => {
+                let features: Vec<&str> = if h264::available() { vec!["h264"] } else { Vec::new() };
+                reply(req, &allowed, 200, &serde_json::json!({ "features": features }).to_string(), &[json()])
+            }
+            (Method::Post, "heartbeat") => reply(req, &allowed, 204, "", &[]),
+            (Method::Post, "h264") => self.start_h264(req, &token, &allowed, query),
+            (Method::Get, "h264") => {
+                let state = self.apps.lock().expect("apps lock").get(&token).and_then(|s| s.job.as_ref().map(h264::Job::state));
+                let body = match state {
+                    None => return reply(req, &allowed, 404, "no conversion", &[]),
+                    Some(h264::State::Running(p)) => serde_json::json!({ "state": "running", "progress": p }),
+                    Some(h264::State::Done) => serde_json::json!({ "state": "done" }),
+                    Some(h264::State::Failed(why)) => serde_json::json!({ "state": "failed", "reason": why }),
+                };
+                reply(req, &allowed, 200, &body.to_string(), &[json()])
+            }
+            (Method::Get, "h264/result") => {
+                let ready = self.apps.lock().expect("apps lock").get(&token).and_then(|s| s.job.as_ref().and_then(h264::Job::result));
+                let opened = ready.and_then(|p| File::open(p).ok()).and_then(|f| f.metadata().ok().map(|m| (f, m.len())));
+                match opened {
+                    Some((file, size)) => stream(req, &allowed, 200, &[("Content-Type", "video/mp4".to_string())], file, size),
+                    None => reply(req, &allowed, 409, "not ready", &[]),
+                }
+            }
+            (Method::Delete, "h264") => {
+                // Dropping the job stops ffmpeg and removes its folder.
+                let job = self.apps.lock().expect("apps lock").get_mut(&token).and_then(|s| s.job.take());
+                drop(job);
+                reply(req, &allowed, 204, "", &[])
+            }
+            (Method::Delete, "") => {
+                let session = self.apps.lock().expect("apps lock").remove(&token);
+                drop(session);
+                reply(req, &allowed, 204, "", &[])
+            }
+            _ => reply(req, &allowed, 405, "method not allowed", &[]),
+        }
+    }
+
+    /// `POST h264?duration=<seconds>`: the page's WebM, its body, becomes an
+    /// MP4 in H.264 (h264.rs). The film is received and converted on a
+    /// thread of its own: the answer (202) comes once the film is received,
+    /// and the page then follows the conversion with `GET h264`. Refused with
+    /// 409 and a reason (`none`, `busy`), 413 when too large.
+    fn start_h264(&self, mut req: Request, token: &str, allowed: &str, query: &str) {
+        let duration = query_value(query, "duration")
+            .and_then(|d| d.parse::<f64>().ok())
+            .filter(|d| d.is_finite() && *d > 0.0)
+            .unwrap_or(0.0);
+        let json = || ("Content-Type", "application/json".to_string());
+        let (job, starter) = match h264::Job::new() {
+            Ok(pair) => pair,
+            Err(why) => {
+                drain(&mut req);
+                return reply(req, allowed, 409, &serde_json::json!({ "reason": why }).to_string(), &[json()]);
+            }
+        };
+        // A new film replaces the session's last one, whose folder goes with it.
+        match self.apps.lock().expect("apps lock").get_mut(token) {
+            Some(session) => session.job = Some(job),
+            None => {
+                drain(&mut req);
+                return reply(req, allowed, 404, "no session", &[]);
+            }
+        }
+        let allowed = allowed.to_string();
+        thread::spawn(move || match starter.receive(req.as_reader()) {
+            Ok(_) => {
+                reply(req, &allowed, 202, &serde_json::json!({ "state": "running" }).to_string(), &[json()]);
+                starter.convert(duration);
+            }
+            Err(why) => {
+                drain(&mut req);
+                let status = if why == "too-large" { 413 } else { 500 };
+                reply(req, &allowed, status, &serde_json::json!({ "reason": why }).to_string(), &[json()]);
+                starter.refuse(why);
+            }
+        });
     }
 
     fn put(&self, mut req: Request, path: &Path, allowed: &str) {
@@ -1396,5 +1556,121 @@ mod tests {
         assert_eq!(through_scheme(&bridge, "DELETE", &at(""), &page, b"").status(), 204);
         assert_eq!(through_scheme(&bridge, "GET", &at("/meta"), &page, b"").status(), 404);
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /* App sessions: services about no file. */
+
+    /// The launcher converts one film at a time: the tests that convert take turns.
+    static CONVERTING_TESTS: Mutex<()> = Mutex::new(());
+
+    fn serve_app() -> (Bridge, String) {
+        let bridge = Bridge::start(|_| {}, never_asked()).unwrap();
+        let token = bridge.open_app(ORIGIN.to_string());
+        let base = format!("http://127.0.0.1:{}/a/{token}", bridge.port);
+        (bridge, base)
+    }
+
+    #[test]
+    fn an_app_session_answers_its_own_app_only() {
+        let (bridge, base) = serve_app();
+        // Not reached yet: it keeps no launcher up.
+        assert_eq!(bridge.live(), 0);
+        let meta: serde_json::Value = ureq::get(&format!("{base}/meta")).set("Origin", ORIGIN).call().unwrap().into_json().unwrap();
+        assert!(meta["features"].is_array(), "{meta}");
+        assert_eq!(meta["features"].as_array().unwrap().contains(&"h264".into()), h264::available());
+        assert_eq!(bridge.live(), 1);
+        assert_eq!(ureq::post(&format!("{base}/heartbeat")).set("Origin", ORIGIN).call().unwrap().status(), 204);
+        // Another origin, no origin, another token.
+        assert!(matches!(
+            ureq::get(&format!("{base}/meta")).set("Origin", "https://evil.example").call(),
+            Err(ureq::Error::Status(403, _))
+        ));
+        assert!(matches!(ureq::get(&format!("{base}/meta")).call(), Err(ureq::Error::Status(403, _))));
+        let other = format!("http://127.0.0.1:{}/a/{}/meta", bridge.port, "0".repeat(64));
+        assert!(matches!(ureq::get(&other).set("Origin", ORIGIN).call(), Err(ureq::Error::Status(404, _))));
+        // An app token is no file token, and the other way round.
+        let file_way = base.replacen("/a/", "/s/", 1);
+        assert!(matches!(ureq::get(&format!("{file_way}/meta")).set("Origin", ORIGIN).call(), Err(ureq::Error::Status(404, _))));
+        // No conversion asked yet.
+        assert!(matches!(ureq::get(&format!("{base}/h264")).set("Origin", ORIGIN).call(), Err(ureq::Error::Status(404, _))));
+        assert_eq!(ureq::delete(&base).set("Origin", ORIGIN).call().unwrap().status(), 204);
+        assert!(matches!(ureq::get(&format!("{base}/meta")).set("Origin", ORIGIN).call(), Err(ureq::Error::Status(404, _))));
+    }
+
+    /// A short WebM as a browser writes it (VP8 picture, Opus sound), made by
+    /// the ffmpeg of the machine running the tests; None when it cannot.
+    fn browser_webm(dir: &Path) -> Option<Vec<u8>> {
+        let ffmpeg = h264::ffmpeg()?;
+        let out = dir.join("made.webm");
+        let made = std::process::Command::new(ffmpeg)
+            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=2"])
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-c:v", "libvpx", "-b:v", "500k", "-c:a", "libopus"])
+            .arg(&out)
+            .status()
+            .ok()?;
+        if !made.success() {
+            return None;
+        }
+        fs::read(&out).ok()
+    }
+
+    /// Asks `GET h264` until the conversion is over; its last answer.
+    fn wait_for_conversion(base: &str) -> serde_json::Value {
+        let start = Instant::now();
+        loop {
+            let state: serde_json::Value = ureq::get(&format!("{base}/h264")).set("Origin", ORIGIN).call().unwrap().into_json().unwrap();
+            if state["state"] != "running" || start.elapsed() > Duration::from_secs(120) {
+                return state;
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+    }
+
+    #[test]
+    fn a_webm_comes_back_as_an_h264_mp4() {
+        let _turn = CONVERTING_TESTS.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = scratch("h264");
+        let Some(webm) = browser_webm(&dir) else {
+            eprintln!("no ffmpeg with libx264, aac, libvpx and libopus here: conversion not tested");
+            return;
+        };
+        let (_bridge, base) = serve_app();
+        let started = ureq::post(&format!("{base}/h264?duration=2"))
+            .set("Origin", ORIGIN)
+            .set("Content-Type", "video/webm")
+            .send_bytes(&webm)
+            .unwrap();
+        assert_eq!(started.status(), 202);
+        let state = wait_for_conversion(&base);
+        assert_eq!(state["state"], "done", "{state}");
+        let answer = ureq::get(&format!("{base}/h264/result")).set("Origin", ORIGIN).call().unwrap();
+        assert_eq!(answer.header("Content-Type"), Some("video/mp4"));
+        let mut mp4 = Vec::new();
+        answer.into_reader().read_to_end(&mut mp4).unwrap();
+        // An MP4 opens on its `ftyp` box, and holds H.264 (`avc1`) and AAC (`mp4a`).
+        assert_eq!(&mp4[4..8], b"ftyp");
+        let has = |tag: &[u8]| mp4.windows(tag.len()).any(|w| w == tag);
+        assert!(has(b"avc1") && has(b"mp4a"));
+        // Done with: its folder goes, and nothing is left to ask about.
+        assert_eq!(ureq::delete(&format!("{base}/h264")).set("Origin", ORIGIN).call().unwrap().status(), 204);
+        assert!(matches!(ureq::get(&format!("{base}/h264")).set("Origin", ORIGIN).call(), Err(ureq::Error::Status(404, _))));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_film_that_is_no_webm_is_refused() {
+        let _turn = CONVERTING_TESTS.lock().unwrap_or_else(|e| e.into_inner());
+        if !h264::available() {
+            eprintln!("no ffmpeg with libx264 and aac here: refusal not tested");
+            return;
+        }
+        let (_bridge, base) = serve_app();
+        // An MP4's opening bytes: not a WebM, and its decoder is not allowed.
+        let started =
+            ureq::post(&format!("{base}/h264?duration=1")).set("Origin", ORIGIN).send_bytes(b"\0\0\0\x18ftypisom\0\0\0\0isomavc1").unwrap();
+        assert_eq!(started.status(), 202);
+        let state = wait_for_conversion(&base);
+        assert_eq!(state["state"], "failed", "{state}");
+        assert!(matches!(ureq::get(&format!("{base}/h264/result")).set("Origin", ORIGIN).call(), Err(ureq::Error::Status(409, _))));
     }
 }

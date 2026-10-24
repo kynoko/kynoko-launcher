@@ -417,6 +417,52 @@ browser, a link naming it only fails.
 - Lifetime: kept alive by a heartbeat every 30 s; closed by the page, or
   after 10 min without heartbeat.
 
+### App sessions
+
+Some services are about no file: today, turning a film an app made in WebM
+into an MP4 in H.264 (see *Films in H.264*). Every page the launcher opens for
+an app, with or without a file, also gets an **app session**:
+
+- fragment `#kynokoService=<host>/<token>` (beside `kynokoBridge` when a file
+  is opened), the same host as a file session (the listener, or `kynoko-bridge`
+  in a Kynoko window off Windows), a 256-bit token bound to the app's origin;
+- its endpoints live under `/a/<token>/`; an app token is no file token (a
+  `/s/` request with it is unknown, and the other way round);
+- kept and dropped as a file session is (heartbeat every 30 s, 10 min without
+  one). Until its page has asked anything, it does not keep the agent up:
+  every app gets one, few use it, and a page that never reaches the bridge
+  must not keep the launcher running for ten minutes. The page reaches it
+  only when it needs a service, after the explanation of section 9.
+
+### Films in H.264
+
+A Kynoko app encodes video with the browser's own encoders, under the browser
+maker's licences. H.264 is the one format a browser may lack: Firefox on
+Linux encodes it with the system's ffmpeg libraries, and fails without them,
+or when the page's process reads numbers with a decimal comma (its libx264
+refuses the level "3.1"; measured on Linux Mint 22.3 with Firefox 158, fixed
+by `LC_NUMERIC=C`). The app then writes a WebM. On such a computer the launcher
+hands that WebM to **the computer's own ffmpeg** (on the `PATH`, or in
+`/usr/bin`, `/usr/local/bin`, `/opt/homebrew/bin`, `/opt/local/bin`,
+`/snap/bin`), with the user's own codec libraries: nothing is bundled (no
+H.264 encoder in the launcher, no GPL code), and the film never leaves the
+computer. `h264` is offered only when that ffmpeg lists the `libx264` and
+`aac` encoders.
+
+- ffmpeg reads the one file the launcher wrote, through the Matroska/WebM
+  demuxer and the VP8, VP9, Opus and Vorbis decoders only
+  (`-protocol_whitelist file`, `-format_whitelist`, `-codec_whitelist`): a
+  page cannot make it open another file, protocol or decoder;
+- it runs with `LC_ALL=C`, without the library paths of an AppImage, without
+  a window on Windows;
+- the picture: H.264 High, `veryfast`, CRF 18 (measured on a 1080p30
+  slideshow in VP8 at 0.25 bit per pixel: 43.6 dB of PSNR against that WebM,
+  as `medium`, 1.6 times as fast); the sound: AAC 192 kb/s; the index at the
+  front (`+faststart`);
+- one conversion at a time in the whole launcher, in a folder of its own in
+  the system's temporary directory, removed with the job: when the page
+  deletes it, asks another, closes its session, or lets it expire.
+
 ### Endpoints
 
 | Method | Path | Result |
@@ -431,6 +477,13 @@ browser, a link naming it only fails.
 | `POST` | `/s/<token>/reveal?which=file\|copy` | The file or its copy shown selected in the system's file manager (Explorer `/select`, Finder `open -R`, freedesktop `FileManager1.ShowItems` else the folder). `204`; `404` when there is no copy. Only these two paths: a session names no other |
 | `POST` | `/s/<token>/heartbeat` | `204` |
 | `DELETE` | `/s/<token>` | `204`, session closed |
+| `GET` | `/a/<token>/meta` | `200` `{ features }`: `h264` when the computer's ffmpeg can make one (see *Films in H.264*). App sessions are absent before 0.5.0 (the fragment has no `kynokoService`) |
+| `POST` | `/a/<token>/heartbeat` | `204` |
+| `POST` | `/a/<token>/h264?duration=<seconds>` | The body, a WebM, becomes an MP4 in H.264. `202` `{ state: "running" }` once the film is received (the conversion then runs on); `409` `{ reason }` when it cannot start: `none` (no ffmpeg able to here), `busy` (another conversion under way); `413` `{ reason: "too-large" }` past 16 GiB. `duration`, the film's length, gives the progress. A new film replaces the session's last one |
+| `GET` | `/a/<token>/h264` | `200` `{ state: "running", progress }` (0 to 1, `null` while ffmpeg has not said), `{ state: "done" }`, or `{ state: "failed", reason }`: `unreadable` (not a WebM ffmpeg takes), `cancelled`, `failed`; `404` when none was asked |
+| `GET` | `/a/<token>/h264/result` | `200` the MP4, streamed, `Content-Type: video/mp4`; `409` until done |
+| `DELETE` | `/a/<token>/h264` | `204`, ffmpeg stopped if it runs, the files removed |
+| `DELETE` | `/a/<token>` | `204`, session closed (its conversion with it) |
 | other | | `404` (unknown token) / `405` |
 
 Every response carries `Access-Control-Allow-Origin: <origin>`,
@@ -557,6 +610,11 @@ icon left of the address) and offers to retry.
 **The page never probes the bridge** to detect whether Kynoko Launcher is
 installed: any such request would itself raise the prompt. The page only talks
 to the bridge when it holds a session token.
+
+An app session (section 8) is reached the same way: only when the page needs
+one of its services, after the explanation above, in the service's words (a
+film in MP4: "Pour enregistrer vos films en MP4, Kynoko Media Studio passe
+par Kynoko Launcher").
 
 ## 10. The web side: contract with the Kynoko app skeleton
 
@@ -891,6 +949,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-12 | Asked for by the user: the update moves to the top of the window, condensed (the version beside the name, "Up to date" and the catalogue's date beside "Check now", a newer version's card of one line under the lead), and the window checks by itself when it shows, at most once an hour, never while hidden (section 13). Still no automatic install. |
 | 2026-10-13 | Asked for by the user, built the same day (account.rs, not yet released): the launcher signs in to Kynoko once (OAuth with PKCE, redirect to 127.0.0.1, a rotating device token in the system's credential store) and hands the sign-in to every browser it opens an app in, through a one-time code of 60 seconds that the platform's API exchanges for an ordinary browser session before sending the browser on to the app (section 20). Decided the same day: the launcher signs in in a Kynoko window, device token 90 days sliding (one year at most), windows opened for an assistant signed in too, Android later. Without it, each browser (the Kynoko window, Firefox, Chrome, each profile) needs its own sign-in. Platform side: `backend/specifications/LAUNCHER_SIGN_IN.md` of the platform repository. |
 | 2026-10-14 | Asked for by the user: the apps convert an InDesign document (.indd) with the user's own InDesign, through the launcher, in a Kynoko window (`indesign_versions`, `indesign_convert`, section 10). The launcher's script, never the page's; the document stays on the computer. A double-click on an .indd that converts before the app opens is the next step, not built. |
+| 2026-10-24 | Asked for by the user, after a Media Studio slideshow took five hours on Linux: an app's film in WebM becomes an MP4 in H.264 through the launcher, with the computer's own ffmpeg (section 8, *App sessions*, *Films in H.264*; h264.rs). Firefox on Linux could not encode H.264 there (its libx264 refused the level "3.1" under a decimal-comma locale); bundling an H.264 encoder in the app was set aside for its patent licence (Via LA), so nothing that encodes H.264 is shipped. New: an app session for every page the launcher opens (`kynokoService`), which keeps the agent up only once its page has reached it. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol

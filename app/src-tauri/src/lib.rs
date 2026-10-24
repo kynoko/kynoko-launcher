@@ -23,6 +23,7 @@ mod browsers;
 mod catalogue;
 mod dialog;
 mod fonts;
+mod h264;
 mod handoff;
 mod indesign;
 mod launch;
@@ -79,6 +80,19 @@ const CLOSE_ASK_GRACE: Duration = Duration::from_secs(2);
 /// launcher is installed for this browser, and its menu entry opens it
 /// directly instead of offering the download.
 const MARKER: &str = "kynokoLauncher=1";
+
+/// The fragment key of an app session (bridge::Bridge::open_app): the
+/// services the launcher gives a page that are about no file.
+const SERVICE: &str = "kynokoService";
+
+/// `kynokoService=<host>/<token>&` for a page of `origin` about to open in
+/// `browser`, or nothing when the bridge cannot start (the page then simply
+/// has no services).
+fn service_fragment(shared: &Shared, browser: Option<&browsers::Browser>, origin: &str) -> String {
+    let Ok(bridge) = shared.bridge() else { return String::new() };
+    let window = browser.is_some_and(|b| b.engine == browsers::Engine::Embedded);
+    format!("{SERVICE}={}/{}&", bridge.host_for(window), bridge.open_app(origin.to_string()))
+}
 
 enum Command {
     /// The settings window, optionally on one app or one of its sections.
@@ -302,10 +316,12 @@ fn open_files(shared: &Shared, named: Option<&str>, files: &[PathBuf]) -> Result
         let origin = origin_of(&base);
         let (browser, profile) = browser_for(&settings, &app.code);
         let key = browser.as_ref().map(|b| reach_key(b, profile.as_deref(), &origin));
+        let service = service_fragment(shared, browser.as_ref(), &origin);
         let token = bridge.open(path.clone(), origin, key);
         // A Kynoko window off Windows reaches the bridge through the launcher's scheme (bridge::SCHEME).
         let window = browser.as_ref().is_some_and(|b| b.engine == browsers::Engine::Embedded);
-        let url = format!("{}/open#kynokoBridge={}/{}&{MARKER}", base.trim_end_matches('/'), bridge.host_for(window), token);
+        let url =
+            format!("{}/open#kynokoBridge={}/{}&{service}{MARKER}", base.trim_end_matches('/'), bridge.host_for(window), token);
         open_page(shared, &settings, app, browser, profile, &url, true)?;
     }
     *shared.last_open.lock().expect("lock") = Some(Instant::now());
@@ -318,8 +334,10 @@ fn launch_app(shared: &Shared, target: &str) -> Result<(), String> {
     let catalogue = shared.catalogue();
     let app = catalogue.app(code).ok_or_else(|| format!("unknown app {code}"))?;
     let settings = Settings::load();
-    let url = format!("{}/{}#{MARKER}", app_url(&settings, app).trim_end_matches('/'), facade);
+    let base = app_url(&settings, app);
     let (browser, profile) = browser_for(&settings, code);
+    let service = service_fragment(shared, browser.as_ref(), &origin_of(&base));
+    let url = format!("{}/{}#{service}{MARKER}", base.trim_end_matches('/'), facade);
     open_page(shared, &settings, app, browser, profile, &url, false)
 }
 
