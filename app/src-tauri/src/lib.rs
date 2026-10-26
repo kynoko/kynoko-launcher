@@ -33,6 +33,7 @@ mod mcp_stdio;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+mod microphone;
 mod ondisk;
 #[cfg(windows)]
 mod programs;
@@ -726,11 +727,17 @@ fn open_embedded(shared: &Shared, settings: &Settings, app: &App, url: &str) -> 
     let target = url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
     let label = format!("app-{}", NEXT.fetch_add(1, Ordering::SeqCst));
     let dress = Dress::of(settings, app);
+    // The microphone only for an app that declares it, on its own origin
+    // (microphone.rs). On Linux such a window is set up before its page
+    // loads, so it starts blank.
+    let declares_microphone = app.grants("microphone");
+    let blank_first = cfg!(target_os = "linux") && declares_microphone;
     // A window without an address bar stays on Kynoko (and its payment
     // pages, whose return must land in this same session): any other
     // address goes to the system's browser.
     thread::spawn(move || {
-        let builder = tauri::WebviewWindowBuilder::new(&handle, &label, tauri::WebviewUrl::External(target));
+        let first = if blank_first { "about:blank".parse::<tauri::Url>().expect("about:blank") } else { target.clone() };
+        let builder = tauri::WebviewWindowBuilder::new(&handle, &label, tauri::WebviewUrl::External(first));
         #[cfg(target_os = "macos")]
         let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
         let built = builder
@@ -746,7 +753,13 @@ fn open_embedded(shared: &Shared, settings: &Settings, app: &App, url: &str) -> 
             // with the web's drag and drop), not to a launcher handler that
             // would swallow them before the page sees anything.
             .disable_drag_drop_handler()
-            .on_page_load(|window, payload| watch_title_bar(window, payload.event()))
+            // The blank page a window set up first starts on is not its app's
+            // page: the title bar waits for the app's (watch_title_bar).
+            .on_page_load(move |window, payload| {
+                if !(blank_first && payload.url().scheme() == "about") {
+                    watch_title_bar(window, payload.event())
+                }
+            })
             .focused(true)
             // The window is named after its page ("Comptes | Kynoko Office"):
             // that is what the taskbar and Alt+Tab show.
@@ -766,7 +779,10 @@ fn open_embedded(shared: &Shared, settings: &Settings, app: &App, url: &str) -> 
             })
             .build();
         match built {
-            Ok(window) => dress.put_on(window),
+            Ok(window) => {
+                microphone::hold(&window, target, declares_microphone);
+                dress.put_on(window)
+            }
             Err(e) => eprintln!("kynoko-launcher: cannot open an app window: {e}"),
         }
     });

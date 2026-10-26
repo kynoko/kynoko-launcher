@@ -45,10 +45,25 @@ winreg = "0.52"
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_RestartManager", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }
 mslnk = "0.1"
 raw-window-handle = "0.6"
+# The microphone in a Kynoko window (microphone.rs): WebView2's permission
+# requests. The versions Tauri itself uses (MIT).
+webview2-com = "0.38"
+windows-core = "0.61"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The microphone in a Kynoko window (microphone.rs): WebKitGTK's settings and
+# permission requests. The version Tauri itself uses (MIT).
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1"
 core-foundation = "0.10"
+# The microphone in a Kynoko window (microphone.rs): WebKit's capture
+# requests. The versions Tauri itself uses (MIT).
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKSecurityOrigin", "WKUIDelegate"] }
+block2 = "0.6"
 
 [profile.release]
 codegen-units = 1

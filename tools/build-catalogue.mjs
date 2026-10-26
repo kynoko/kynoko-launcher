@@ -19,6 +19,11 @@
  * `manifest` is only where this script reads the tiles from, and may point
  * at a local checkout. Nothing about development environments is written
  * into the output.
+ *
+ * An entry may also carry `framePermissions` (["microphone"], for one): what
+ * the app's window gives it, which the platform's catalogue holds and an
+ * app's kynoko-app.json does not. Left out, the bundled snapshot grants
+ * nothing until the platform's catalogue replaces it.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -50,6 +55,9 @@ for (const app of apps) {
     names: app.names,
     status: 'live',
     facades,
+    ...(Array.isArray(app.framePermissions) && app.framePermissions.length
+      ? { framePermissions: app.framePermissions.filter((f) => typeof f === 'string') }
+      : {}),
   });
   console.log(`${app.code}: ${facades.length} facade(s), ${facades.reduce((n, f) => n + f.files.length, 0)} file type(s)`);
 }

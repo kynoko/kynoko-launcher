@@ -1,1 +1,2 @@
 "NSAppleEventsUsageDescription" = "When an app asks it to, Kynoko Launcher has InDesign export an InDesign document as IDML, so that the app can open it.";
+"NSMicrophoneUsageDescription" = "A Kynoko app open in Kynoko Launcher uses the microphone only when you ask it to, for voice commands for instance.";

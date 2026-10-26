@@ -29,6 +29,12 @@ pub struct App {
     /// manifest's `browsers`, relayed by the platform).
     #[serde(default)]
     pub browsers: Browsers,
+    /// Browser features the app's window gives it (`microphone`,
+    /// `screen-wake-lock`...), as the platform validated them: the same list
+    /// the platform's own window grants the app's frame. Empty for most apps,
+    /// and absent from a catalogue older than it.
+    #[serde(default, rename = "framePermissions")]
+    pub frame_permissions: Vec<String>,
 }
 
 /// An app's word on browsers: the engines it recommends, and what the user
@@ -295,10 +301,16 @@ impl App {
             .unwrap_or_else(|| self.code.clone())
     }
 
-    /// The app as the system sees it: its word on browsers is for the window
-    /// alone, a change of it rewrites no association and no shortcut.
+    /// The app as the system sees it: its word on browsers and what its
+    /// window grants it are for the windows alone, a change of them rewrites
+    /// no association and no shortcut.
     pub fn for_system(&self) -> App {
-        App { browsers: Browsers::default(), ..self.clone() }
+        App { browsers: Browsers::default(), frame_permissions: Vec::new(), ..self.clone() }
+    }
+
+    /// Whether the app's window gives it `feature` (see `frame_permissions`).
+    pub fn grants(&self, feature: &str) -> bool {
+        self.frame_permissions.iter().any(|f| f == feature)
     }
 
     /// The app's name where the system lists it among other programs ("Open
@@ -352,6 +364,14 @@ mod tests {
         assert!(plain.browsers.recommended.is_empty() && plain.browsers.limitations.is_empty());
         // A change of it is not a change of what the system holds.
         assert!(app.for_system() == App { browsers: Browsers::default(), ..app.clone() });
+        // What the window grants: read when said, nothing when not.
+        let voice: App = serde_json::from_str(
+            r#"{"code":"V","url":"u","status":"live","framePermissions":["microphone","screen-wake-lock"]}"#,
+        )
+        .unwrap();
+        assert!(voice.grants("microphone") && !voice.grants("camera"));
+        assert!(!plain.grants("microphone"));
+        assert!(voice.for_system() == App { frame_permissions: Vec::new(), ..voice.clone() });
     }
 
     #[test]
@@ -363,6 +383,7 @@ mod tests {
             status: "live".into(),
             facades: vec![],
             browsers: Browsers::default(),
+            frame_permissions: vec![],
         };
         assert_eq!(app("Media Studio", "Media Studio").display_name("en"), "Kynoko Media Studio");
         assert_eq!(app("Kynoko Office", "Kynoko Office").display_name("fr"), "Kynoko Office");

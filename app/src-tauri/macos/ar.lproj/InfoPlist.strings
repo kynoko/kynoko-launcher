@@ -1,1 +1,2 @@
 "NSAppleEventsUsageDescription" = "بطلب من أحد التطبيقات، يجعل Kynoko Launcher برنامج InDesign يُصدّر مستند InDesign بصيغة IDML، كي يتمكن التطبيق من فتحه.";
+"NSMicrophoneUsageDescription" = "لا يستخدم تطبيق Kynoko المفتوح في Kynoko Launcher الميكروفون إلا عندما تطلب منه ذلك، للأوامر الصوتية مثلًا.";

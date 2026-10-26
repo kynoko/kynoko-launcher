@@ -10,11 +10,15 @@
  * - CFBundleURLTypes: the kynoko-launcher:// scheme.
  * - NSAppleEventsUsageDescription: why the launcher drives InDesign
  *   (indesign.rs). Without it, macOS refuses the Apple events without asking
- *   the user. The sentence is shown in the user's language: the bundle holds
- *   one InfoPlist.strings per language (app/src-tauri/macos/<lang>.lproj,
- *   written here too, copied into Contents/Resources by tauri.conf.json
- *   bundle.macOS.files), and the languages are declared
- *   (CFBundleLocalizations).
+ *   the user.
+ * - NSMicrophoneUsageDescription: why a page in a Kynoko window may hear the
+ *   microphone (voice commands; docs/SPEC.md, section 5).
+ *   Without it, macOS refuses the microphone to the whole launcher, whatever
+ *   the page and WebKit say.
+ * Both sentences are shown in the user's language: the bundle holds one
+ * InfoPlist.strings per language (app/src-tauri/macos/<lang>.lproj, written
+ * here too, copied into Contents/Resources by tauri.conf.json
+ * bundle.macOS.files), and the languages are declared (CFBundleLocalizations).
  *
  * Usage: node tools/mac-info-plist.mjs   (reads app/src-tauri/catalogue.json)
  */
@@ -36,6 +40,17 @@ const APPLE_EVENTS = {
   'zh-Hans': '应应用的请求，Kynoko Launcher 会让 InDesign 将 InDesign 文档导出为 IDML，以便该应用打开。',
   'zh-Hant': '應 App 的要求，Kynoko Launcher 會讓 InDesign 將 InDesign 文件轉存為 IDML，以便該 App 開啟。',
   ar: 'بطلب من أحد التطبيقات، يجعل Kynoko Launcher برنامج InDesign يُصدّر مستند InDesign بصيغة IDML، كي يتمكن التطبيق من فتحه.',
+};
+
+/** Why a page in a Kynoko window may hear the microphone, in the same 7 languages. */
+const MICROPHONE = {
+  en: 'A Kynoko app open in Kynoko Launcher uses the microphone only when you ask it to, for voice commands for instance.',
+  fr: "Une app Kynoko ouverte dans Kynoko Launcher n'utilise le micro que lorsque vous le lui demandez, pour des commandes vocales par exemple.",
+  es: 'Una app de Kynoko abierta en Kynoko Launcher solo usa el micrófono cuando se lo pides, por ejemplo para los comandos de voz.',
+  ja: 'Kynoko Launcher で開いた Kynoko のアプリは、音声コマンドなど、ユーザーが指示したときにだけマイクを使います。',
+  'zh-Hans': '在 Kynoko Launcher 中打开的 Kynoko 应用仅在您要求时使用麦克风，例如语音命令。',
+  'zh-Hant': '在 Kynoko Launcher 中開啟的 Kynoko 應用程式僅在您要求時使用麥克風，例如語音指令。',
+  ar: 'لا يستخدم تطبيق Kynoko المفتوح في Kynoko Launcher الميكروفون إلا عندما تطلب منه ذلك، للأوامر الصوتية مثلًا.',
 };
 
 const types = catalogue.apps
@@ -75,6 +90,7 @@ ${types}
       </dict>
     </array>
     <key>NSAppleEventsUsageDescription</key><string>${esc(APPLE_EVENTS.en)}</string>
+    <key>NSMicrophoneUsageDescription</key><string>${esc(MICROPHONE.en)}</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleLocalizations</key>
     <array>${Object.keys(APPLE_EVENTS).map((l) => `<string>${l}</string>`).join('')}</array>
@@ -83,10 +99,14 @@ ${types}
 `;
 writeFileSync(join(dir, 'Info.mac.plist'), plist);
 
-// The same sentence in each language, where macOS looks for it.
+// The same sentences in each language, where macOS looks for them.
 for (const [lang, text] of Object.entries(APPLE_EVENTS)) {
   const folder = join(dir, 'macos', `${lang}.lproj`);
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, 'InfoPlist.strings'), `"NSAppleEventsUsageDescription" = ${JSON.stringify(text)};\n`);
+  writeFileSync(
+    join(folder, 'InfoPlist.strings'),
+    `"NSAppleEventsUsageDescription" = ${JSON.stringify(text)};\n`
+      + `"NSMicrophoneUsageDescription" = ${JSON.stringify(MICROPHONE[lang])};\n`,
+  );
 }
 console.log(`Info.mac.plist: ${catalogue.apps.length} apps, scheme kynoko-launcher`);

@@ -1,1 +1,2 @@
 "NSAppleEventsUsageDescription" = "应应用的请求，Kynoko Launcher 会让 InDesign 将 InDesign 文档导出为 IDML，以便该应用打开。";
+"NSMicrophoneUsageDescription" = "在 Kynoko Launcher 中打开的 Kynoko 应用仅在您要求时使用麦克风，例如语音命令。";

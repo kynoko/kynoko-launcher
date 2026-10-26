@@ -186,6 +186,14 @@ pre-generated static JSON document, so that serving it costs nothing:
   and Linux). The window marks the recommended browsers in each app's browser
   choice, and shows the limitations of the browser the app opens in under the
   app's line. A change of it rewrites no association and no shortcut.
+- `framePermissions` (per app, from the platform's catalogue row; absent when
+  empty): the browser features the app's window gives it, among a closed list
+  the platform keeps (`microphone`, `screen-wake-lock`, ...). The platform's
+  own window grants them to the app's frame; the Kynoko window acts on
+  `microphone` (section 5, *The microphone in a Kynoko window*). An app's
+  kynoko-app.json does not carry it, so the bundled snapshot only has it when
+  tools/build-catalogue.mjs is told. A change of it rewrites no association
+  and no shortcut.
 
 ### Refresh policy
 
@@ -274,6 +282,24 @@ browser **profile**, so the profile is part of the choice:
 | Chromium | `<exe> --profile-directory=<dir> --app=<url>` (app window). If the app is installed as a PWA in that profile, launching it by `--app-id` at a given URL is to be verified in phase 1. |
 | Gecko | `<exe> -P <profile> -new-window <url>` |
 | WebKit | `open -a <Safari.app> <url>` |
+
+### The microphone in a Kynoko window
+
+An app may listen to the microphone (voice commands, turned on in the app). It
+says so in the platform's catalogue (`framePermissions`, section 4). The
+microphone goes to that app only, on its own origin: any other page in the
+window (a payment page) and any app that did not declare it are refused, on
+every system (microphone.rs). The camera is left as each engine answers it.
+
+| System | What the launcher does | Who asks the user |
+|---|---|---|
+| Windows (WebView2) | answers WebView2's `PermissionRequested` for the microphone: refused unless the app declares it and the request comes from its origin, then left to WebView2 | WebView2's prompt, per site; then Windows' microphone privacy setting |
+| macOS (WKWebView) | says why in its bundle: `NSMicrophoneUsageDescription`, in the 7 languages (tools/mac-info-plist.mjs); without it macOS refuses the microphone to the whole launcher. wry answers every capture request with "grant" in its UI delegate: that answer is replaced, once, by the launcher's, which grants the microphone to the declared app's own origin in its own window and refuses it otherwise | macOS, once for the launcher |
+| Linux (WebKitGTK) | for an app that declares `microphone` only: turns WebKitGTK's media streams on (off by default), and answers its permission requests, yes for sound alone on the app's own origin, no for anything else | the app, in its own words, before it turns the microphone on; WebKitGTK has no prompt of its own |
+
+WebKitGTK reads its media setting when a page's document is made, not for one
+already made: such a window opens on a blank page, is set up, then goes to its
+app, and its title bar waits for the app's page (`watch_title_bar`).
 
 ## 6. Shortcuts
 
@@ -890,6 +916,12 @@ catalogue in the system's language, falling back to English.
    Windows has been tested end to end (InDesign 2019: a document converted,
    an InDesign started for it quit, one already open left with its
    documents). Needs a Mac with InDesign before a release.
+10. **The microphone in a Kynoko window** (section 5): written and compiled
+    for the three systems, not yet tried with a microphone. The macOS part
+    replaces an answer of wry's UI delegate at run time: a wry update that
+    stops answering capture requests leaves them to WebKit's own prompt, per
+    site, for every page (the launcher says so in its log). To check on
+    each wry update.
 
 ## 17. Phases
 
@@ -950,6 +982,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-13 | Asked for by the user, built the same day (account.rs, not yet released): the launcher signs in to Kynoko once (OAuth with PKCE, redirect to 127.0.0.1, a rotating device token in the system's credential store) and hands the sign-in to every browser it opens an app in, through a one-time code of 60 seconds that the platform's API exchanges for an ordinary browser session before sending the browser on to the app (section 20). Decided the same day: the launcher signs in in a Kynoko window, device token 90 days sliding (one year at most), windows opened for an assistant signed in too, Android later. Without it, each browser (the Kynoko window, Firefox, Chrome, each profile) needs its own sign-in. Platform side: `backend/specifications/LAUNCHER_SIGN_IN.md` of the platform repository. |
 | 2026-10-14 | Asked for by the user: the apps convert an InDesign document (.indd) with the user's own InDesign, through the launcher, in a Kynoko window (`indesign_versions`, `indesign_convert`, section 10). The launcher's script, never the page's; the document stays on the computer. A double-click on an .indd that converts before the app opens is the next step, not built. |
 | 2026-10-24 | Asked for by the user, after a Media Studio slideshow took five hours on Linux: an app's film in WebM becomes an MP4 in H.264 through the launcher, with the computer's own ffmpeg (section 8, *App sessions*, *Films in H.264*; h264.rs). Firefox on Linux could not encode H.264 there (its libx264 refused the level "3.1" under a decimal-comma locale); bundling an H.264 encoder in the app was set aside for its patent licence (Via LA), so nothing that encodes H.264 is shipped. New: an app session for every page the launcher opens (`kynokoService`), which keeps the agent up only once its page has reached it. |
+| 2026-10-26 | Asked for by the user, for an app's voice commands: the microphone in a Kynoko window (section 5, *The microphone in a Kynoko window*). The catalogue gains `framePermissions` per app (the platform's closed list, the same one its own window grants to the app's frame). Asked for by the user: the microphone for the apps that declare it only, on every system, on their own origin. Windows: WebView2's `PermissionRequested` refuses the others, WebView2 asks for the declared one. macOS: `NSMicrophoneUsageDescription` in the bundle, in the 7 languages, and wry's "grant everything" capture answer replaced by the launcher's. Linux: WebKitGTK's media streams on and its permission requests answered for the declared apps only; such a window opens blank and is set up before its page loads. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol

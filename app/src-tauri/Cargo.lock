@@ -2195,6 +2195,7 @@ dependencies = [
 name = "kynoko-launcher"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "core-foundation 0.10.1",
  "dirs 5.0.1",
  "fontdb",
@@ -2203,6 +2204,9 @@ dependencies = [
  "image",
  "keyring",
  "mslnk",
+ "objc2",
+ "objc2-foundation",
+ "objc2-web-kit",
  "plist",
  "raw-window-handle",
  "rfd",
@@ -2215,6 +2219,9 @@ dependencies = [
  "tiny_http",
  "tungstenite",
  "ureq",
+ "webkit2gtk",
+ "webview2-com",
+ "windows-core 0.61.2",
  "windows-sys 0.59.0",
  "winreg 0.52.0",
 ]
