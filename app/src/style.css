@@ -31,12 +31,30 @@ html, body {
 .titlebar.macos .tb-brand { padding-inline-start: 0; }
 .tb-icon { inline-size: 18px; block-size: 18px; flex: none; }
 .tb-title { font-size: 0.84rem; font-weight: 650; white-space: nowrap; }
+.tb-version-slot { display: flex; }
 .tb-version {
   font-size: 0.72rem; font-weight: 600; color: var(--kynoko-hint);
   padding-block: 1px; padding-inline: 7px;
   border-radius: var(--kynoko-radius-xs);
   background: rgba(var(--kynoko-glow-rgb), 0.1);
 }
+/* A newer version is out: "current → newer", in the brand's colours, a
+   button to the General tab, with a slow glow (none when motion is reduced). */
+button.tb-version.newer {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-block-size: 0; padding-block: 2px; padding-inline: 8px;
+  border: 0; color: #fff; font-weight: 700; line-height: 1.35;
+  background: var(--kynoko-brand-gradient);
+  box-shadow: 0 0 0 0 rgba(var(--kynoko-glow-rgb), 0.55);
+  animation: glow 2.4s var(--kynoko-ease) infinite;
+}
+button.tb-version.newer:hover { filter: brightness(1.1); }
+button.tb-version.newer .arrow { opacity: 0.8; font-weight: 600; }
+@keyframes glow {
+  0%, 60%, 100% { box-shadow: 0 0 0 0 rgba(var(--kynoko-glow-rgb), 0); }
+  30% { box-shadow: 0 0 0 4px rgba(var(--kynoko-glow-rgb), 0.35); }
+}
+@media (prefers-reduced-motion: reduce) { button.tb-version.newer { animation: none; } }
 .tb-fill { flex: 1; min-inline-size: 12px; }
 /* Another window has the focus: the bar fades, as the system's own does. */
 .titlebar.inactive .tb-brand, .titlebar.inactive .win-btn { opacity: 0.55; }
@@ -143,6 +161,14 @@ button.tab[aria-selected='true']::after {
   border-radius: 2px; background: var(--kynoko-brand-gradient);
 }
 button.tab:focus-visible { box-shadow: none; outline: 2px solid var(--kynoko-primary); outline-offset: -4px; }
+/* Something to see in a tab: a newer version (the brand's), a catalogue
+   that could not be updated (amber). */
+.tab-dot {
+  flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%;
+  background: var(--kynoko-brand-gradient);
+  box-shadow: 0 0 0 3px rgba(var(--kynoko-glow-rgb), 0.2);
+}
+.tab-dot.warn { background: #f5b83d; box-shadow: 0 0 0 3px rgba(245, 184, 61, 0.22); }
 .badge {
   min-inline-size: 18px; padding-inline: 5px; border-radius: 999px;
   font-size: 0.7rem; font-weight: 700; line-height: 18px; text-align: center;

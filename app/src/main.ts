@@ -63,7 +63,8 @@ document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
    A repaint redraws what is inside them, so that the page keeps its scroll
    and the bar its hover. */
 
-const brandVersion = el('span', { class: 'tb-version' });
+/** The version in the bar: plain, or, when a newer one is out, "current → newer" (paintVersion). */
+const brandVersion = el('span', { class: 'tb-version-slot' });
 const accountSlot = el('div', { class: 'tb-account' });
 const bar = titleBar(
   { minimize: t(lang, 'WINDOW_MINIMIZE'), maximize: t(lang, 'WINDOW_MAXIMIZE'), restore: t(lang, 'WINDOW_RESTORE'), close: t(lang, 'WINDOW_CLOSE') },
@@ -499,6 +500,36 @@ function updateBanner(c: CheckReport): HTMLElement {
  * The catalogue's trouble, said quietly with the last success: never a
  * notification. Null when there is none.
  */
+/** The catalogue could not be updated (a check or the background refresh failed). */
+function catalogueFailed(state: State): boolean {
+  return lastCheck?.catalogue === 'failed' || !!state.catalogueError;
+}
+
+/** What was last drawn in the bar's version: redrawn only when it changes. */
+let versionDrawn = '';
+
+/**
+ * The version beside the launcher's name. A newer version out: "current →
+ * newer", in the brand's colours, a button that opens the General tab and
+ * puts the focus on the banner's install (what the user will want next).
+ */
+function paintVersion(state: State): void {
+  const newer = lastCheck?.newer && lastCheck.latest ? lastCheck.latest : null;
+  const drawn = JSON.stringify([state.version, newer]);
+  if (drawn === versionDrawn) return;
+  versionDrawn = drawn;
+  if (!newer) {
+    brandVersion.replaceChildren(el('span', { class: 'tb-version' }, state.version));
+    return;
+  }
+  const button = el('button', { type: 'button', class: 'tb-version newer', ariaLabel: t(lang, 'APP_NEWER', { version: newer }) },
+    el('span', {}, state.version), el('span', { class: 'arrow', ariaHidden: 'true' }, '→'), el('span', {}, newer));
+  button.addEventListener('click', () => {
+    void showTab('general').then(() => banners.querySelector<HTMLElement>('[data-key="update:install"], [data-key="update:download"]')?.focus());
+  });
+  brandVersion.replaceChildren(button);
+}
+
 function catalogueTrouble(state: State): string | null {
   const c = lastCheck;
   const last = state.catalogueChecked ? new Date(state.catalogueChecked * 1000).toLocaleString(lang) : null;
@@ -628,13 +659,13 @@ function storedTab(): Tab {
 /** The tab shown (this window only: a convenience); a link's app or section picks its own. */
 let tab: Tab = storedTab();
 
-function showTab(next: Tab, focus = false): void {
+function showTab(next: Tab, focus = false): Promise<void> {
   if (next !== tab) {
     tab = next;
     try { localStorage.setItem('tab', next); } catch { /* private storage: back to the apps next time */ }
     content.scrollTop = 0;
   }
-  void render().then(() => { if (focus) document.getElementById('tab-' + next)?.focus(); });
+  return render().then(() => { if (focus) document.getElementById('tab-' + next)?.focus(); });
 }
 
 function paintTabs(state: State): void {
@@ -646,9 +677,21 @@ function paintTabs(state: State): void {
       icon(glyph[id], 16), el('span', {}, label[id])), 'tab:' + id);
     // Assistants at work right now: their number on the tab.
     if (id === 'assistants' && state.assistantsOnline > 0) b.append(el('span', { class: 'badge' }, String(state.assistantsOnline)));
+    // Something to see in General: a newer version (the brand's dot), else
+    // a catalogue that could not be updated (an amber one). Its words for
+    // screen readers.
+    if (id === 'general') {
+      const newer = lastCheck?.newer && lastCheck.latest ? lastCheck.latest : null;
+      const trouble = catalogueFailed(state) ? catalogueTrouble(state) : null;
+      if (newer || trouble) {
+        const dot = el('span', { class: newer ? 'tab-dot' : 'tab-dot warn', role: 'img' });
+        dot.ariaLabel = newer ? t(lang, 'APP_NEWER', { version: newer }) : trouble ?? '';
+        b.append(dot);
+      }
+    }
     b.setAttribute('aria-selected', String(selected));
     b.setAttribute('aria-controls', 'panel');
-    b.addEventListener('click', () => showTab(id));
+    b.addEventListener('click', () => void showTab(id));
     // The arrows move between the tabs, in the reading direction.
     b.addEventListener('keydown', (e) => {
       const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key] ?? 0;
@@ -656,7 +699,7 @@ function paintTabs(state: State): void {
         : step ? (TABS.indexOf(id) + step * (lang === 'ar' ? -1 : 1) + TABS.length) % TABS.length : -1;
       if (to < 0) return;
       e.preventDefault();
-      showTab(TABS[to], true);
+      void showTab(TABS[to], true);
     });
     return b;
   }));
@@ -889,7 +932,7 @@ async function render(): Promise<void> {
   const active = document.activeElement;
   const focusKey = active instanceof HTMLElement ? active.dataset.key ?? null : null;
 
-  brandVersion.textContent = state.version;
+  paintVersion(state);
   paintAccount(state);
   paintTabs(state);
   banners.replaceChildren(...(lastCheck?.newer && lastCheck.latest ? [updateBanner(lastCheck)] : []));

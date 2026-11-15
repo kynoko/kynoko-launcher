@@ -207,7 +207,8 @@ pre-generated static JSON document, so that serving it costs nothing:
 - A failure retries with an exponential backoff (5 min, 15 min, 1 h, capped by
   the 12 h period).
 - A failure is shown **only inside Kynoko Launcher**, as a quiet line with
-  the date of the last successful update. **No system notification**, ever.
+  the date of the last successful update, and an amber dot on the window's
+  General tab. **No system notification**, ever.
 - Offline, or before the first success, the last cached catalogue is used, or
   the snapshot bundled in the build.
 
@@ -830,7 +831,10 @@ assistants: its page cannot tell, the launcher says), and again on "Check
 now". The version beside the name in the window's title bar; in the
 "General" tab, "Up to date" (or that it could not be checked) and the
 catalogue's date beside "Check now"; a newer version's banner under the
-tabs, whatever the tab, its name and two buttons on one line. No system
+tabs, whatever the tab, its name and two buttons on one line. A newer
+version also shows in the title bar ("0.6.0 → 0.7.0", in the brand's
+colours, with a slow glow: a button that opens the General tab with the
+focus on the banner's install) and as a dot on the General tab. No system
 notification.
 
 - **Download** (with "from GitHub" in small): the release's page, in the
@@ -985,6 +989,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-24 | Asked for by the user, after a Media Studio slideshow took five hours on Linux: an app's film in WebM becomes an MP4 in H.264 through the launcher, with the computer's own ffmpeg (section 8, *App sessions*, *Films in H.264*; h264.rs). Firefox on Linux could not encode H.264 there (its libx264 refused the level "3.1" under a decimal-comma locale); bundling an H.264 encoder in the app was set aside for its patent licence (Via LA), so nothing that encodes H.264 is shipped. New: an app session for every page the launcher opens (`kynokoService`), which keeps the agent up only once its page has reached it. |
 | 2026-10-26 | Asked for by the user, for an app's voice commands: the microphone in a Kynoko window (section 5, *The microphone in a Kynoko window*). The catalogue gains `framePermissions` per app (the platform's closed list, the same one its own window grants to the app's frame). Asked for by the user: the microphone for the apps that declare it only, on every system, on their own origin. Windows: WebView2's `PermissionRequested` refuses the others, WebView2 asks for the declared one. macOS: `NSMicrophoneUsageDescription` in the bundle, in the 7 languages, and wry's "grant everything" capture answer replaced by the launcher's. Linux: WebKitGTK's media streams on and its permission requests answered for the declared apps only; such a window opens blank and is set up before its page loads. |
 | 2026-11-15 | Asked for by the user (a graphic and ease-of-use pass, the sign-in in a title bar of the window's own): the settings window draws its own title bar, as a Kynoko window does: the launcher's icon (the build's, `default_window_icon`), name and version, the Kynoko account (section 20), the window's buttons; its empty parts move the window, a double press maximizes it. It uses the same own_window_* commands as a Kynoko window, now granted to the settings window too (capability "default"): they act on the calling window only, and Tauri's generic window commands stay refused. Windows and Linux lose the system's bar at start; macOS keeps its window buttons over the bar's start (`titleBarStyle` Overlay, `trafficLightPosition`). Under the bar, three tabs: Apps (the lead, the first start's question, the default browser, the apps), AI assistants (their number at work on the tab), General (version, update check, catalogue, reset); a link's app or section picks its tab. The update's banner sits under the tabs, whatever the tab. The Kynoko window's note no longer asks to sign in there when the launcher's account signs it in, and an app's browser note is not repeated when it is the default's. Questions and messages are drawn by the window (a dialog, passing messages) instead of the web engine's `confirm()` and `alert()`, which were titled with the page's address; a failure is now seen (it was drawn, then wiped by the repaint). The Windows "default apps" advice shows once an app is associated. Minimum window size 560 x 480. |
+| 2026-11-15 | Asked for by the user: what there is to see in the General tab shows from anywhere. A newer version turns the title bar's version into "current → newer" (brand colours, a slow glow, none when motion is reduced), a button that opens General with the focus on the banner's install, and puts the brand's dot on the General tab; a catalogue that could not be updated puts an amber dot there (its words for screen readers). The catalogue has no "update available" state to show: it updates itself (section 4). |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol
