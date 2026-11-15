@@ -474,9 +474,10 @@ fn cleanup(keep_preferences: bool) -> Result<(), String> {
     Ok(())
 }
 
-/* Kynoko windows' own title bar (the skeleton's KynokoNativeWindowService).
-   Each command acts on the window the calling page is in, and can reach no
-   other: the page names nothing. Only Kynoko windows are granted them. */
+/* Kynoko windows' own title bar (the skeleton's KynokoNativeWindowService),
+   and the settings window's (main.ts). Each command acts on the window the
+   calling page is in, and can reach no other: the page names nothing. Only
+   Kynoko windows and the settings window are granted them. */
 
 /// The page holds the title bar: noted, and the system's taken away if it
 /// had been given back (see TITLE_BAR_GRACE). Taken away on the window's own
@@ -1986,6 +1987,15 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             let _ = handle.state::<Shared>().handle.set(handle.clone());
+            // The settings window draws its own title bar (main.ts: the
+            // account, the window's buttons, through own_window_*). macOS
+            // keeps its window buttons, over the bar's start (tauri.conf.json:
+            // titleBarStyle "Overlay"); elsewhere the system's bar goes,
+            // before the window is first shown.
+            #[cfg(not(target_os = "macos"))]
+            if let Some(main) = handle.get_webview_window("main") {
+                let _ = main.set_decorations(false);
+            }
             if !cleaning && !settings::isolated() {
                 if let Err(e) = assoc::register_scheme(&mut Inventory::load()) {
                     eprintln!("kynoko-launcher: cannot register {}://: {e}", assoc::SCHEME);

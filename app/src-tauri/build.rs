@@ -1,7 +1,8 @@
 fn main() {
     // Every command is listed, so that each gets its own permission: the
     // settings window is granted the launcher's commands (capability
-    // "default"), a Kynoko window's page only the own_window_* ones and the
+    // "default"; with the own_window_* ones for its own title bar), a Kynoko
+    // window's page only the own_window_* ones and the
     // computer's fonts, system_fonts, system_font_face and system_font_file,
     // and InDesign, indesign_versions and indesign_convert (capability
     // "kynoko-window").

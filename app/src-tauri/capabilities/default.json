@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The settings window: the launcher's own page, and all its commands.",
+  "description": "The settings window: the launcher's own page, and all its commands. It draws its own title bar, as a Kynoko window does: the own_window_* commands that move, minimize, maximize and close the window the page is in (closing the settings window hides it), and the launcher's icon to show in it.",
   "windows": [
     "main"
   ],
@@ -30,6 +30,12 @@
     "allow-set-assistant",
     "allow-account-sign-in",
     "allow-account-cancel",
-    "allow-account-sign-out"
+    "allow-account-sign-out",
+    "allow-own-window-drag",
+    "allow-own-window-minimize",
+    "allow-own-window-toggle-maximize",
+    "allow-own-window-is-maximized",
+    "allow-own-window-close",
+    "core:app:allow-default-window-icon"
   ]
 }

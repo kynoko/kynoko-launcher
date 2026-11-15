@@ -827,10 +827,11 @@ No automatic update (Tauri's updater requires its own signing key; to
 revisit). The window asks GitHub for the latest release by itself when it
 shows (at most once an hour; never while it is hidden, serving files or
 assistants: its page cannot tell, the launcher says), and again on "Check
-now". All of it at the top of the window: the version beside the name; "Up
-to date" (or that it could not be checked) and the catalogue's date beside
-"Check now"; under the lead, a newer version's card, its name and two
-buttons on one line. No system notification.
+now". The version beside the name in the window's title bar; in the
+"General" tab, "Up to date" (or that it could not be checked) and the
+catalogue's date beside "Check now"; a newer version's banner under the
+tabs, whatever the tab, its name and two buttons on one line. No system
+notification.
 
 - **Download** (with "from GitHub" in small): the release's page, in the
   system's browser.
@@ -983,6 +984,7 @@ catalogue in the system's language, falling back to English.
 | 2026-10-14 | Asked for by the user: the apps convert an InDesign document (.indd) with the user's own InDesign, through the launcher, in a Kynoko window (`indesign_versions`, `indesign_convert`, section 10). The launcher's script, never the page's; the document stays on the computer. A double-click on an .indd that converts before the app opens is the next step, not built. |
 | 2026-10-24 | Asked for by the user, after a Media Studio slideshow took five hours on Linux: an app's film in WebM becomes an MP4 in H.264 through the launcher, with the computer's own ffmpeg (section 8, *App sessions*, *Films in H.264*; h264.rs). Firefox on Linux could not encode H.264 there (its libx264 refused the level "3.1" under a decimal-comma locale); bundling an H.264 encoder in the app was set aside for its patent licence (Via LA), so nothing that encodes H.264 is shipped. New: an app session for every page the launcher opens (`kynokoService`), which keeps the agent up only once its page has reached it. |
 | 2026-10-26 | Asked for by the user, for an app's voice commands: the microphone in a Kynoko window (section 5, *The microphone in a Kynoko window*). The catalogue gains `framePermissions` per app (the platform's closed list, the same one its own window grants to the app's frame). Asked for by the user: the microphone for the apps that declare it only, on every system, on their own origin. Windows: WebView2's `PermissionRequested` refuses the others, WebView2 asks for the declared one. macOS: `NSMicrophoneUsageDescription` in the bundle, in the 7 languages, and wry's "grant everything" capture answer replaced by the launcher's. Linux: WebKitGTK's media streams on and its permission requests answered for the declared apps only; such a window opens blank and is set up before its page loads. |
+| 2026-11-15 | Asked for by the user (a graphic and ease-of-use pass, the sign-in in a title bar of the window's own): the settings window draws its own title bar, as a Kynoko window does: the launcher's icon (the build's, `default_window_icon`), name and version, the Kynoko account (section 20), the window's buttons; its empty parts move the window, a double press maximizes it. It uses the same own_window_* commands as a Kynoko window, now granted to the settings window too (capability "default"): they act on the calling window only, and Tauri's generic window commands stay refused. Windows and Linux lose the system's bar at start; macOS keeps its window buttons over the bar's start (`titleBarStyle` Overlay, `trafficLightPosition`). Under the bar, three tabs: Apps (the lead, the first start's question, the default browser, the apps), AI assistants (their number at work on the tab), General (version, update check, catalogue, reset); a link's app or section picks its tab. The update's banner sits under the tabs, whatever the tab. The Kynoko window's note no longer asks to sign in there when the launcher's account signs it in, and an app's browser note is not repeated when it is the default's. Questions and messages are drawn by the window (a dialog, passing messages) instead of the web engine's `confirm()` and `alert()`, which were titled with the page's address; a failure is now seen (it was drawn, then wiped by the repaint). The Windows "default apps" advice shows once an app is associated. Minimum window size 560 x 480. |
 | 2026-09-25 | Product renamed **Kynoko Launcher** (was "Kynoko Applications", too easily confused with the apps themselves); repository `kynoko/kynoko-launcher`, binary and packages `kynoko-launcher`. |
 
 ## 19. Assistants (MCP): normative protocol
@@ -1191,12 +1193,16 @@ whenever a session expires in one of them.
 
 ### The window
 
-A "Kynoko account" line at the top, under the update line (section 13):
-signed out, "Sign in to open your apps signed in, in every browser" and a
-"Sign in" button; signed in, the account's name and e-mail address, "Sign
-out", and a line on what it does ("Your apps open signed in, in every browser
-Kynoko Launcher opens them in"). While the sign-in window is open: "Finish
-signing in in the window that opened" and Cancel (which closes it).
+The account is in the window's title bar, before the window's buttons:
+signed out, a "Sign in" button that signs in at once (its tooltip: "Sign in
+here once: your apps will open signed in, in all your browsers"); signed in,
+the account's badge (its initials) and name, which open a panel with the
+name and e-mail address, a line on what it does ("Your apps open signed in,
+in every browser") and "Sign out". While the sign-in window is open, the
+button waits and its panel says "Finish signing in in the window that
+opened", with Cancel (which closes it). A sign-in that fails says why in a
+passing message at the bottom of the window. A sign-in that is not kept (no
+credential store) marks the badge and says so in the panel.
 
 ### The sign-in window
 

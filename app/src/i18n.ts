@@ -10,7 +10,8 @@ type Dict = Record<
   | 'REMOVE_ALL' | 'REMOVE_NOTE' | 'REMOVE_CONFIRM' | 'REMOVED' | 'CATALOGUE' | 'CHECK_NOW' | 'CHECKING' | 'CAT_FAILED' | 'APP_NEWER' | 'UPDATE_NONE' | 'UPDATE_UNKNOWN' | 'DOWNLOAD_NEW' | 'INSTALL_NEW' | 'DOWNLOAD_FROM' | 'INSTALL_DOWNLOADING' | 'INSTALL_CLOSES' | 'INSTALL_WINDOWS' | 'INSTALL_FILES' | 'INSTALL_WAITING' | 'INSTALL_FLUSHING' | 'INSTALL_RESTARTING' | 'INSTALL_HANDED_MACOS' | 'INSTALL_HANDED_LINUX' | 'INSTALL_CANCELLED' | 'INSTALL_FAILED' | 'INSTALL_CANCEL' | 'INSTALL_NOW' | 'CATALOGUE_FAILED' | 'CATALOGUE_BUNDLED'
   | 'ACCOUNT_SIGNED_OUT' | 'ACCOUNT_SIGN_IN' | 'ACCOUNT_PENDING' | 'ACCOUNT_CANCEL' | 'ACCOUNT_SIGNED_IN' | 'ACCOUNT_SIGNED_IN_ANON' | 'ACCOUNT_CARRIES' | 'ACCOUNT_SIGN_OUT' | 'ACCOUNT_NOT_KEPT' | 'ACCOUNT_DENIED' | 'ACCOUNT_FAILED'
   | 'WELCOME_TITLE' | 'WELCOME_DEFAULT' | 'WELCOME_WINDOWS' | 'WELCOME_ASSOCIATE' | 'WELCOME_LATER'
-  | 'ASSISTANTS_TITLE' | 'ASSISTANTS_LEAD' | 'ASSISTANTS_NONE' | 'ASSISTANTS_RESTART' | 'ASSISTANTS_ONLINE' | 'ASSISTANTS_MANUAL' | 'ASSISTANTS_MANUAL_HINT' | 'ASSISTANTS_COPY' | 'ASSISTANTS_COPIED' | 'ASSISTANTS_NOT_JSON' | 'ASSISTANTS_FAILED',
+  | 'ASSISTANTS_TITLE' | 'ASSISTANTS_LEAD' | 'ASSISTANTS_NONE' | 'ASSISTANTS_RESTART' | 'ASSISTANTS_ONLINE' | 'ASSISTANTS_MANUAL' | 'ASSISTANTS_MANUAL_HINT' | 'ASSISTANTS_COPY' | 'ASSISTANTS_COPIED' | 'ASSISTANTS_NOT_JSON' | 'ASSISTANTS_FAILED'
+  | 'TAB_GENERAL' | 'ACCOUNT_MENU' | 'EMBEDDED_HINT_SIGNED_IN' | 'WINDOW_MINIMIZE' | 'WINDOW_MAXIMIZE' | 'WINDOW_RESTORE' | 'WINDOW_CLOSE',
   string
 >;
 
@@ -106,6 +107,13 @@ const FR: Dict = {
   ASSISTANTS_COPIED: "Copié",
   ASSISTANTS_NOT_JSON: "La configuration de {{assistant}} contient des commentaires : ajoutez Kynoko à la main (configuration manuelle ci-dessous).",
   ASSISTANTS_FAILED: "Impossible de modifier la configuration : {{error}}",
+  TAB_GENERAL: "Général",
+  ACCOUNT_MENU: "Compte Kynoko",
+  EMBEDDED_HINT_SIGNED_IN: "Fenêtre Kynoko : les apps et vos fichiers s'ouvrent en mode application sur tous les systèmes.",
+  WINDOW_MINIMIZE: "Réduire",
+  WINDOW_MAXIMIZE: "Agrandir",
+  WINDOW_RESTORE: "Restaurer",
+  WINDOW_CLOSE: "Fermer",
 };
 
 const EN: Dict = {
@@ -200,6 +208,13 @@ const EN: Dict = {
   ASSISTANTS_COPIED: "Copied",
   ASSISTANTS_NOT_JSON: "The configuration of {{assistant}} holds comments: add Kynoko by hand (manual setup below).",
   ASSISTANTS_FAILED: "The configuration could not be changed: {{error}}",
+  TAB_GENERAL: "General",
+  ACCOUNT_MENU: "Kynoko account",
+  EMBEDDED_HINT_SIGNED_IN: "Kynoko window: apps and your files open in app mode on every system.",
+  WINDOW_MINIMIZE: "Minimize",
+  WINDOW_MAXIMIZE: "Maximize",
+  WINDOW_RESTORE: "Restore",
+  WINDOW_CLOSE: "Close",
 };
 
 const ES: Dict = {
@@ -294,6 +309,13 @@ const ES: Dict = {
   ASSISTANTS_COPIED: "Copiado",
   ASSISTANTS_NOT_JSON: "La configuración de {{assistant}} contiene comentarios: añade Kynoko a mano (configuración manual aquí abajo).",
   ASSISTANTS_FAILED: "No se pudo cambiar la configuración: {{error}}",
+  TAB_GENERAL: "General",
+  ACCOUNT_MENU: "Cuenta de Kynoko",
+  EMBEDDED_HINT_SIGNED_IN: "Ventana de Kynoko: las apps y sus archivos se abren en modo aplicación en todos los sistemas.",
+  WINDOW_MINIMIZE: "Minimizar",
+  WINDOW_MAXIMIZE: "Maximizar",
+  WINDOW_RESTORE: "Restaurar",
+  WINDOW_CLOSE: "Cerrar",
 };
 
 const JA: Dict = {
@@ -388,6 +410,13 @@ const JA: Dict = {
   ASSISTANTS_COPIED: "コピーしました",
   ASSISTANTS_NOT_JSON: "{{assistant}}の設定にはコメントが含まれています。Kynokoを手動で追加してください（下の手動設定）。",
   ASSISTANTS_FAILED: "設定を変更できませんでした：{{error}}",
+  TAB_GENERAL: "全般",
+  ACCOUNT_MENU: "Kynoko アカウント",
+  EMBEDDED_HINT_SIGNED_IN: "Kynoko のウィンドウ：どのシステムでも、アプリとファイルがアプリモードで開きます。",
+  WINDOW_MINIMIZE: "最小化",
+  WINDOW_MAXIMIZE: "最大化",
+  WINDOW_RESTORE: "元に戻す",
+  WINDOW_CLOSE: "閉じる",
 };
 
 const ZH_HANS: Dict = {
@@ -482,6 +511,13 @@ const ZH_HANS: Dict = {
   ASSISTANTS_COPIED: "已复制",
   ASSISTANTS_NOT_JSON: "{{assistant}} 的配置中含有注释，请手动添加 Kynoko（见下方手动配置）。",
   ASSISTANTS_FAILED: "无法修改配置：{{error}}",
+  TAB_GENERAL: "常规",
+  ACCOUNT_MENU: "Kynoko 账户",
+  EMBEDDED_HINT_SIGNED_IN: "Kynoko 窗口：在所有系统上，应用和文件都以应用模式打开。",
+  WINDOW_MINIMIZE: "最小化",
+  WINDOW_MAXIMIZE: "最大化",
+  WINDOW_RESTORE: "还原",
+  WINDOW_CLOSE: "关闭",
 };
 
 const ZH_HANT: Dict = {
@@ -576,6 +612,13 @@ const ZH_HANT: Dict = {
   ASSISTANTS_COPIED: "已複製",
   ASSISTANTS_NOT_JSON: "{{assistant}} 的設定中含有註解，請手動加入 Kynoko（見下方手動設定）。",
   ASSISTANTS_FAILED: "無法修改設定：{{error}}",
+  TAB_GENERAL: "一般",
+  ACCOUNT_MENU: "Kynoko 帳戶",
+  EMBEDDED_HINT_SIGNED_IN: "Kynoko 視窗：在所有系統上，應用程式和檔案都以應用程式模式開啟。",
+  WINDOW_MINIMIZE: "最小化",
+  WINDOW_MAXIMIZE: "最大化",
+  WINDOW_RESTORE: "還原",
+  WINDOW_CLOSE: "關閉",
 };
 
 const AR: Dict = {
@@ -670,6 +713,13 @@ const AR: Dict = {
   ASSISTANTS_COPIED: "تم النسخ",
   ASSISTANTS_NOT_JSON: "تحتوي إعدادات {{assistant}} على تعليقات: يلزم إضافة Kynoko يدويًا (الإعداد اليدوي أدناه).",
   ASSISTANTS_FAILED: "تعذّر تعديل الإعدادات: {{error}}",
+  TAB_GENERAL: "عام",
+  ACCOUNT_MENU: "حساب Kynoko",
+  EMBEDDED_HINT_SIGNED_IN: "نافذة Kynoko: تُفتح التطبيقات وملفاتك في وضع التطبيق على كل الأنظمة.",
+  WINDOW_MINIMIZE: "تصغير",
+  WINDOW_MAXIMIZE: "تكبير",
+  WINDOW_RESTORE: "استعادة",
+  WINDOW_CLOSE: "إغلاق",
 };
 
 const DICTS: Record<Lang, Dict> = { fr: FR, en: EN, es: ES, ja: JA, 'zh-Hans': ZH_HANS, 'zh-Hant': ZH_HANT, ar: AR };

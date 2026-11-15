@@ -16,7 +16,12 @@
         "title": "Kynoko Launcher",
         "width": 780,
         "height": 760,
-        "visible": false
+        "minWidth": 560,
+        "minHeight": 480,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 16, "y": 13 }
       }
     ],
     "security": {

@@ -1,29 +1,203 @@
 * { box-sizing: border-box; }
 
 html, body {
+  block-size: 100%;
   margin: 0;
+  overflow: hidden;
   background: var(--kynoko-window);
   color: var(--kynoko-text);
   font: 15px/1.45 Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-main { padding-block: 20px 28px; padding-inline: 24px; max-inline-size: 760px; margin-inline: auto; }
+/* The window: the title bar and the tabs on top (they stay), the update's
+   banner under them, and the page, which scrolls under them alone. */
+#root { display: flex; flex-direction: column; block-size: 100%; }
+.chrome {
+  position: relative; z-index: 10; flex: none;
+  background: var(--kynoko-window-bar);
+  border-block-end: 1px solid var(--kynoko-hairline);
+  user-select: none; -webkit-user-select: none;
+}
+.content { flex: 1; min-block-size: 0; overflow-y: auto; outline: none; scrollbar-width: thin; scrollbar-color: var(--kynoko-hairline-strong) transparent; }
+.page { padding-block: 18px 32px; padding-inline: 24px; max-inline-size: 760px; margin-inline: auto; }
 
-h1 { font-size: 1.35rem; margin: 0 0 4px; }
-.lead { margin: 0 0 20px; color: var(--kynoko-hint); }
-/* The top: the name and version, then whether it is up to date, the
-   catalogue's date and "Check now", on one line that wraps when narrow. */
-.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; margin-block-end: 4px; }
-.top h1 { margin: 0; }
-.top h1 .version { margin-inline-start: 8px; font-size: 0.85rem; font-weight: 500; color: var(--kynoko-hint); }
-.top .status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.top .status .note { margin: 0; }
-.catalogue-note { margin: -12px 0 16px; }
-/* The Kynoko account, under the lead: what it gives and its one button. */
-.account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: -10px 0 18px; }
-.account-line .note { margin: 0; flex: 1; min-inline-size: 16em; }
-.account-note { margin: -12px 0 16px; }
+/* ---------------------------------------------------------- the title bar */
+
+.titlebar { display: flex; align-items: stretch; block-size: 40px; }
+/* macOS draws its own window buttons over the start of the bar, on the left
+   whatever the page's language (they follow the system): room for them. */
+.titlebar.macos { padding-left: 84px; }
+.tb-brand { display: flex; align-items: center; gap: 9px; min-inline-size: 0; padding-inline: 14px 8px; }
+.titlebar.macos .tb-brand { padding-inline-start: 0; }
+.tb-icon { inline-size: 18px; block-size: 18px; flex: none; }
+.tb-title { font-size: 0.84rem; font-weight: 650; white-space: nowrap; }
+.tb-version {
+  font-size: 0.72rem; font-weight: 600; color: var(--kynoko-hint);
+  padding-block: 1px; padding-inline: 7px;
+  border-radius: var(--kynoko-radius-xs);
+  background: rgba(var(--kynoko-glow-rgb), 0.1);
+}
+.tb-fill { flex: 1; min-inline-size: 12px; }
+/* Another window has the focus: the bar fades, as the system's own does. */
+.titlebar.inactive .tb-brand, .titlebar.inactive .win-btn { opacity: 0.55; }
+
+.win-buttons { display: flex; }
+.win-btn {
+  display: grid; place-items: center;
+  inline-size: 46px; min-block-size: 0; padding: 0;
+  border: 0; border-radius: 0; background: transparent; color: var(--kynoko-text);
+  cursor: default; transition: background 0.12s ease, color 0.12s ease;
+}
+.win-btn:hover { border-color: transparent; background: color-mix(in srgb, currentColor 10%, transparent); }
+/* The close button's red, as on the system's own title bars. */
+.win-btn.close:hover { background: #c42b1c; color: #fff; }
+.win-btn:focus-visible { box-shadow: none; outline: 2px solid var(--kynoko-primary); outline-offset: -2px; }
+
+/* The account, at the end of the bar, before the window's buttons. */
+.tb-account { position: relative; display: flex; align-items: center; padding-inline: 6px 8px; }
+button.account-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-block-size: 0; block-size: 30px; max-inline-size: 260px;
+  padding-inline: 4px 8px;
+  border: 1px solid transparent; border-radius: var(--kynoko-radius-sm);
+  background: transparent; font-size: 0.82rem; font-weight: 600;
+}
+button.account-btn:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.3); background: rgba(var(--kynoko-glow-rgb), 0.08); }
+button.account-btn[aria-expanded='true'] { border-color: rgba(var(--kynoko-glow-rgb), 0.45); background: rgba(var(--kynoko-glow-rgb), 0.12); }
+button.account-btn .who { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.account-btn .caret { display: grid; color: var(--kynoko-hint); transition: transform 0.2s var(--kynoko-ease); }
+button.account-btn .caret.open { transform: rotate(180deg); }
+/* Signed out: the one call to action of the bar. */
+button.account-btn.sign-in { padding-inline: 10px 12px; border: 0; background: var(--kynoko-brand-gradient); color: #fff; }
+button.account-btn.sign-in:hover { filter: brightness(1.08); }
+.avatar {
+  position: relative; display: grid; place-items: center; flex: none;
+  border-radius: var(--kynoko-radius-xs);
+  background: var(--kynoko-brand-gradient); color: #fff; font-weight: 700; letter-spacing: 0.02em;
+}
+.avatar.small { inline-size: 22px; block-size: 22px; font-size: 0.66rem; }
+.avatar.large { inline-size: 40px; block-size: 40px; font-size: 0.95rem; border-radius: var(--kynoko-radius-sm); }
+/* The sign-in is not kept (no credential store): a mark on the badge. */
+button.account-btn.warn .avatar::after {
+  content: ''; position: absolute; inset-block-start: -3px; inset-inline-end: -3px;
+  inline-size: 9px; block-size: 9px; border-radius: 50%;
+  background: #f5b83d; box-shadow: 0 0 0 2px var(--kynoko-window-bar);
+}
+.spinner {
+  flex: none; inline-size: 14px; block-size: 14px; border-radius: 50%;
+  border: 2px solid rgba(var(--kynoko-glow-rgb), 0.25); border-block-start-color: var(--kynoko-primary);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+.account-panel {
+  position: absolute; inset-block-start: calc(100% + 2px); inset-inline-end: 8px; z-index: 20;
+  inline-size: 300px; max-inline-size: calc(100vw - 24px);
+  display: grid; gap: 12px; padding: 16px;
+  background: var(--kynoko-window); color: var(--kynoko-text);
+  border: 1px solid var(--kynoko-hairline-strong); border-radius: var(--kynoko-radius);
+  box-shadow: var(--kynoko-shadow-soft);
+  user-select: text; -webkit-user-select: text; cursor: auto;
+  animation: drop 0.16s var(--kynoko-ease);
+}
+@keyframes drop { from { opacity: 0; transform: translateY(-4px); } }
+.account-panel p { margin: 0; }
+.panel-who { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
+.who-text { display: grid; min-inline-size: 0; }
+.who-text strong, .who-text .note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+.panel-row, .panel-line { display: flex; align-items: flex-start; gap: 10px; }
+.panel-row .spinner { margin-block-start: 3px; }
+.panel-line .icon { flex: none; margin-block-start: 2px; color: var(--kynoko-primary); }
+.panel-warn { padding: 8px 10px; border-radius: var(--kynoko-radius-sm); background: rgba(245, 184, 61, 0.12); border: 1px solid rgba(245, 184, 61, 0.4); color: var(--kynoko-text); }
+.panel-actions { display: flex; justify-content: flex-end; gap: 10px; padding-block-start: 12px; border-block-start: 1px solid var(--kynoko-hairline); }
+
+/* A tooltip, drawn like the window (the system's ignores the theme). */
+.tip {
+  position: absolute; inset-block-start: calc(100% + 4px); inset-inline-end: 8px; z-index: 30;
+  inline-size: max-content; max-inline-size: 280px;
+  padding-block: 7px; padding-inline: 10px;
+  font-size: 0.8rem; font-weight: 500; line-height: 1.4;
+  background: var(--kynoko-text); color: var(--kynoko-window);
+  border-radius: var(--kynoko-radius-xs); box-shadow: var(--kynoko-shadow-soft);
+  pointer-events: none; opacity: 0; transition: opacity 0.12s ease;
+}
+.tip.on { opacity: 1; }
+
+/* ---------------------------------------------------------------- the tabs */
+
+.tabs-row { max-inline-size: 760px; margin-inline: auto; padding-inline: 12px; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+button.tab {
+  position: relative; display: inline-flex; align-items: center; gap: 8px;
+  min-block-size: 42px; padding-inline: 12px;
+  border: 0; border-radius: 0; background: none;
+  color: var(--kynoko-hint); font-size: 0.9rem; font-weight: 600; white-space: nowrap;
+}
+button.tab:hover { color: var(--kynoko-text); border-color: transparent; }
+button.tab[aria-selected='true'] { color: var(--kynoko-text); }
+button.tab[aria-selected='true'] .icon { color: var(--kynoko-primary); }
+/* The tab shown: the brand's line under it, on the bar's edge. */
+button.tab[aria-selected='true']::after {
+  content: ''; position: absolute; inset-inline: 10px; inset-block-end: -1px; block-size: 2px;
+  border-radius: 2px; background: var(--kynoko-brand-gradient);
+}
+button.tab:focus-visible { box-shadow: none; outline: 2px solid var(--kynoko-primary); outline-offset: -4px; }
+.badge {
+  min-inline-size: 18px; padding-inline: 5px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; line-height: 18px; text-align: center;
+  background: var(--kynoko-brand-gradient); color: #fff;
+}
+
+/* ------------------------------------------------------- banners and notes */
+
+/* The newer version: under the tabs, whatever the tab. */
+.banner.update {
+  flex: none;
+  background: linear-gradient(90deg, rgba(var(--kynoko-glow-rgb), 0.16), rgba(139, 92, 246, 0.1));
+  border-block-end: 1px solid rgba(var(--kynoko-glow-rgb), 0.3);
+}
+.banner-inner { max-inline-size: 760px; margin-inline: auto; padding-block: 10px; padding-inline: 24px; }
+.update-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.update-title { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 700; font-size: 0.95rem; }
+.update-title .icon { flex: none; color: var(--kynoko-primary); }
+.update-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; }
+/* "Download" says where from, in small, on the same line and baseline: one
+   line of text, centred in the button like its neighbour's. */
+button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 500; opacity: 0.75; }
+/* Where an install is: its words and Cancel on one line, the download's bar
+   under them, the banner's whole width. */
+.update .install {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin-block-start: 10px; padding-block-start: 10px;
+  border-block-start: 1px solid rgba(var(--kynoko-glow-rgb), 0.25);
+}
+.update .install-text { flex: 1; min-inline-size: 12em; }
+.update .install.failed .install-text { color: var(--kynoko-danger); }
+.update .install.cancelled .install-text { color: var(--kynoko-hint); }
+.update .install progress {
+  flex-basis: 100%; inline-size: 100%; block-size: 6px;
+  appearance: none; border: 0; border-radius: 999px; overflow: hidden;
+  background: var(--kynoko-hairline-strong);
+}
+.update .install progress::-webkit-progress-bar { background: var(--kynoko-hairline-strong); border-radius: 999px; }
+.update .install progress::-webkit-progress-value { background: var(--kynoko-brand-gradient); border-radius: 999px; }
+.update .install progress::-moz-progress-bar { background: var(--kynoko-brand-gradient); border-radius: 999px; }
+
+.lead { margin: 0 0 18px; color: var(--kynoko-hint); }
 h2 { font-size: 1rem; margin: 26px 0 10px; }
+.note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
+.catalogue-note { margin: -8px 0 16px; }
+/* Something to know and act on, with its button. */
+.callout {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  margin-block: 14px 0; padding-block: 12px; padding-inline: 14px;
+  border: 1px solid rgba(var(--kynoko-glow-rgb), 0.25); border-radius: var(--kynoko-radius-sm);
+  background: rgba(var(--kynoko-glow-rgb), 0.06);
+  font-size: 0.86rem;
+}
+.callout > .icon { flex: none; color: var(--kynoko-primary); }
+.callout > p, .callout > span { flex: 1; min-inline-size: 16em; margin: 0; }
 
 .card {
   border: 1px solid var(--kynoko-hairline);
@@ -33,8 +207,15 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
   padding: 14px 16px;
 }
 
+/* ------------------------------------------------------------ the apps tab */
+
+/* The default browser: a line of its own above the apps, not a card. */
+.browser-default { margin-block-end: 18px; }
+.field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.field-label { font-weight: 600; }
+
 /* One card per app: the Boréal fieldset's facet, surface and glow. */
-.apps { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px 14px; }
+.apps { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; gap: 12px 14px; }
 /* Every card shares the list's columns (name | browser | summary), so the
    browsers line up from one app to the next. */
 .app {
@@ -58,9 +239,10 @@ h2 { font-size: 1rem; margin: 26px 0 10px; }
 }
 .app-head { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
 .app-head button.name { justify-self: start; }
-/* On the app's line the browser choice is narrower, so that the line holds
-   the name, the choice and the summary together. */
-.app-head select { inline-size: 200px; max-inline-size: 100%; text-overflow: ellipsis; }
+/* The app's browser takes the line's room: the Kynoko window's long name
+   reads whole. */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; min-inline-size: 0; }
+.app-head .controls select { flex: 1 1 180px; min-inline-size: 0; max-inline-size: 360px; text-overflow: ellipsis; }
 .app-head .summary { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.35; white-space: nowrap; }
 /* The rest of the header: what is set, and the chevron. */
 button.expand {
@@ -70,10 +252,13 @@ button.expand {
 }
 button.expand:hover { color: var(--kynoko-primary); }
 .app-body { grid-column: 1 / -1; display: grid; gap: 2px; margin-block-start: 4px; }
-/* The default browser: a line of its own above the apps, not a card. */
-.browser-default { margin-block-start: 22px; }
-.browser-default .field { font-weight: 600; }
-.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Narrow: the browser goes under the app's name, the whole width. */
+@media (max-width: 640px) {
+  .apps { grid-template-columns: minmax(0, 1fr) auto; }
+  .app-head .controls { grid-column: 1 / -1; grid-row: 2; }
+  .app-head button.expand { grid-column: 2; grid-row: 1; }
+  .app-head .controls select { max-inline-size: none; }
+}
 
 /* The app's icon and name: the button that opens it. */
 button.name {
@@ -184,6 +369,77 @@ button.link {
 }
 button.link:disabled { color: var(--kynoko-hint); cursor: default; }
 
+/* What an app says the user will miss in the browser it opens in. */
+.app > .note { grid-column: 1 / -1; margin: 6px 0 0; }
+.limits {
+  grid-column: 1 / -1;
+  display: grid; gap: 2px; margin: 8px 0 0; padding: 8px 10px;
+  font-size: 0.82rem; line-height: 1.4; color: var(--kynoko-text);
+  border-radius: var(--kynoko-radius-sm);
+  background: rgba(245, 184, 61, 0.12); border: 1px solid rgba(245, 184, 61, 0.4);
+}
+.limits strong { font-weight: 700; }
+.limits .suggest-line { margin-block-start: 4px; padding-block-start: 5px; border-block-start: 1px dashed rgba(245, 184, 61, 0.5); }
+/* None of the browsers an app recommends is installed: some are named. */
+.suggest {
+  grid-column: 1 / -1; margin: 8px 0 0; padding: 8px 10px;
+  font-size: 0.82rem; line-height: 1.4; color: var(--kynoko-text);
+  border-radius: var(--kynoko-radius-sm);
+  background: rgba(var(--kynoko-glow-rgb), 0.08); border: 1px solid rgba(var(--kynoko-glow-rgb), 0.28);
+}
+
+/* The first start's question (main.ts, welcomeOf): above the apps, the apps
+   that would open the user's files ticked, their types in view. */
+.welcome { margin-block-end: 20px; border-color: rgba(var(--kynoko-glow-rgb), 0.35); }
+.welcome h2 { margin-block-start: 0; }
+.welcome-apps { display: grid; gap: 8px; margin-block: 12px 14px; }
+label.welcome-app { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; cursor: pointer; }
+label.welcome-app input { grid-row: span 2; }
+label.welcome-app span { font-weight: 600; }
+label.welcome-app small { grid-column: 2; color: var(--kynoko-hint); font-size: 0.8rem; overflow-wrap: anywhere; }
+label.welcome-app:has(input:not(:checked)) span { color: var(--kynoko-hint); }
+.welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ------------------------------------------------------ the assistants tab */
+
+/* One line per assistant found: its name, its switch at the end. */
+.assistant-list { display: grid; padding-block: 4px; padding-inline: 16px; }
+.assistant-list label.assistant { display: flex; flex-direction: row-reverse; justify-content: space-between; min-block-size: 52px; }
+.assistant-list label.assistant + label.assistant { border-block-start: 1px solid var(--kynoko-hairline); }
+.assistants .online { display: flex; align-items: center; gap: 8px; }
+.live { inline-size: 8px; block-size: 8px; border-radius: 50%; background: #34c38f; box-shadow: 0 0 0 3px rgba(52, 195, 143, 0.2); }
+.assistants details.manual { margin-block-start: 16px; }
+.assistants details.manual summary { cursor: pointer; font-weight: 600; }
+.assistants pre.snippet {
+  margin-block: 8px; padding: 10px 12px; overflow-x: auto;
+  font-size: 0.8rem; line-height: 1.4; text-align: start;
+  background: var(--kynoko-surface-sunken, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--kynoko-hairline); border-radius: var(--kynoko-radius-sm);
+  user-select: text; -webkit-user-select: text;
+}
+
+/* --------------------------------------------------------- the general tab */
+
+.about-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; }
+.about-icon { inline-size: 44px; block-size: 44px; flex: none; }
+.about-text { flex: 1; min-inline-size: 14em; }
+.about h2 { margin: 0; font-size: 1.1rem; }
+.about h2 .version { margin-inline-start: 8px; font-size: 0.85rem; font-weight: 500; color: var(--kynoko-hint); }
+.about .status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-block-start: 2px; }
+.about .state { display: inline-flex; align-items: center; gap: 5px; }
+.about .state.ok { color: var(--kynoko-text); font-weight: 600; }
+.about .state.ok .icon { color: #34c38f; }
+.about .catalogue-note { margin: 12px 0 0; }
+.busy .icon { animation: spin 1s linear infinite; }
+/* The reset: apart from the rest, its effect written beside it. */
+.reset {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-block-start: 16px;
+  border-color: color-mix(in srgb, var(--kynoko-danger) 35%, transparent);
+}
+.reset .note { flex: 1; min-inline-size: 16em; margin: 0; }
+
+/* ---------------------------------------------------------------- controls */
+
 select, button {
   font: inherit;
   min-block-size: 38px;
@@ -211,91 +467,49 @@ select {
 }
 [dir='rtl'] select { background-position: left 13px center; }
 button { cursor: pointer; font-weight: 600; }
+button.with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 button.primary { background: var(--kynoko-brand-gradient); color: #fff; border: 0; }
-button.danger { color: var(--kynoko-danger); }
+button.danger { color: var(--kynoko-danger); border-color: color-mix(in srgb, var(--kynoko-danger) 40%, transparent); }
+button.danger:hover { border-color: var(--kynoko-danger); background: color-mix(in srgb, var(--kynoko-danger) 8%, var(--kynoko-window)); }
+button.danger-solid { background: var(--kynoko-danger); color: #fff; border: 0; }
 /* A button that cannot be used now (a check, an install under way) looks it. */
 button:disabled { opacity: 0.5; cursor: default; }
 button:disabled:hover { border-color: rgba(var(--kynoko-glow-rgb), 0.28); }
 :focus-visible { outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
 button.name:focus-visible, button.expand:focus-visible, button.accordion:focus-visible, button.link:focus-visible { box-shadow: none; outline: 2px solid var(--kynoko-primary); outline-offset: 2px; }
 
-.field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.note { color: var(--kynoko-hint); font-size: 0.85rem; margin: 8px 0 0; }
-/* A note on an app's own browser, under the app's line. */
-.app > .note { grid-column: 1 / -1; margin: 6px 0 0; }
-/* What an app says the user will miss in the browser it opens in. */
-.limits {
-  grid-column: 1 / -1;
-  display: grid; gap: 2px; margin: 8px 0 0; padding: 8px 10px;
-  font-size: 0.82rem; line-height: 1.4; color: var(--kynoko-text);
-  border-radius: var(--kynoko-radius-sm);
-  background: rgba(245, 184, 61, 0.12); border: 1px solid rgba(245, 184, 61, 0.4);
-}
-.limits strong { font-weight: 700; }
-.limits .suggest-line { margin-block-start: 4px; padding-block-start: 5px; border-block-start: 1px dashed rgba(245, 184, 61, 0.5); }
-/* None of the browsers an app recommends is installed: some are named. */
-.suggest {
-  grid-column: 1 / -1; margin: 8px 0 0; padding: 8px 10px;
-  font-size: 0.82rem; line-height: 1.4; color: var(--kynoko-text);
-  border-radius: var(--kynoko-radius-sm);
-  background: rgba(var(--kynoko-glow-rgb), 0.08); border: 1px solid rgba(var(--kynoko-glow-rgb), 0.28);
-}
-.error { color: var(--kynoko-danger); margin: 10px 0 0; }
-/* The newer version, under the lead: its name and its two buttons on one
-   line (the buttons one height), wrapping under the name when narrow. */
-.card.update { margin-block-end: 20px; padding-block: 10px; }
-.update-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
-.update .update-title { margin: 0; font-weight: 700; font-size: 0.95rem; }
-.update-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; }
-/* "Download" says where from, in small, on the same line and baseline: one
-   line of text, centred in the button like its neighbour's. */
-button.from small { margin-inline-start: 6px; font-size: 0.75rem; font-weight: 500; opacity: 0.75; }
-/* Where an install is: its words and Cancel on one line, the download's bar
-   under them, the card's whole width. */
-.update .install {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
-  margin-block-start: 10px; padding-block-start: 10px;
-  border-block-start: 1px solid var(--kynoko-hairline);
-}
-.update .install-text { flex: 1; min-inline-size: 12em; }
-.update .install.failed .install-text { color: var(--kynoko-danger); }
-.update .install.cancelled .install-text { color: var(--kynoko-hint); }
-.update .install progress {
-  flex-basis: 100%; inline-size: 100%; block-size: 6px;
-  appearance: none; border: 0; border-radius: 999px; overflow: hidden;
-  background: var(--kynoko-hairline-strong);
-}
-.update .install progress::-webkit-progress-bar { background: var(--kynoko-hairline-strong); border-radius: 999px; }
-.update .install progress::-webkit-progress-value { background: var(--kynoko-brand-gradient); border-radius: 999px; }
-.update .install progress::-moz-progress-bar { background: var(--kynoko-brand-gradient); border-radius: 999px; }
-/* The reset: apart from the rest, its effect written beside it. */
-.reset {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  margin-block-start: 22px; padding-block-start: 16px;
-  border-block-start: 1px solid var(--kynoko-hairline);
-}
-.reset .note { flex: 1; min-inline-size: 16em; margin: 0; }
+/* ----------------------------------------------------- over the window */
 
-/* The first start's question (main.ts, welcomeOf): above everything, the
-   apps that would open the user's files ticked, their types in view. */
-.welcome { margin-block-end: 20px; border-color: rgba(var(--kynoko-glow-rgb), 0.35); }
-.welcome h2 { margin-block-start: 0; }
-.welcome-apps { display: grid; gap: 8px; margin-block: 12px 14px; }
-label.welcome-app { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; cursor: pointer; }
-label.welcome-app input { grid-row: span 2; }
-label.welcome-app span { font-weight: 600; }
-label.welcome-app small { grid-column: 2; color: var(--kynoko-hint); font-size: 0.8rem; overflow-wrap: anywhere; }
-label.welcome-app:has(input:not(:checked)) span { color: var(--kynoko-hint); }
-.welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-
-/* AI assistants (main.ts, assistantsOf): one switch per assistant found,
-   then what to add by hand to any other. */
-.assistant-list { display: grid; gap: 10px; margin-block: 12px 4px; }
-.assistants details.manual { margin-block-start: 12px; }
-.assistants details.manual summary { cursor: pointer; font-weight: 600; }
-.assistants pre.snippet {
-  margin-block: 8px; padding: 10px 12px; overflow-x: auto;
-  font-size: 0.8rem; line-height: 1.4; text-align: start;
-  background: var(--kynoko-surface-sunken, rgba(127, 127, 127, 0.08));
-  border: 1px solid var(--kynoko-hairline); border-radius: 12px 3px;
+dialog.k-dialog {
+  inline-size: 460px; max-inline-size: calc(100vw - 32px);
+  padding: 22px 22px 18px;
+  color: var(--kynoko-text); background: var(--kynoko-window);
+  border: 1px solid var(--kynoko-hairline-strong); border-radius: var(--kynoko-radius);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
+dialog.k-dialog::backdrop { background: rgba(12, 14, 24, 0.45); }
+.dialog-text p { margin: 0 0 10px; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-block-start: 18px; }
+
+.toasts {
+  position: fixed; inset-block-end: 16px; inset-inline: 16px; z-index: 40;
+  display: grid; justify-items: center; gap: 8px; pointer-events: none;
+}
+.toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px;
+  max-inline-size: 560px; padding-block: 8px; padding-inline: 14px 6px;
+  font-size: 0.88rem;
+  background: var(--kynoko-window-bar); color: var(--kynoko-text);
+  border: 1px solid var(--kynoko-hairline-strong); border-radius: var(--kynoko-radius-sm);
+  box-shadow: var(--kynoko-shadow-soft);
+  animation: rise 0.18s var(--kynoko-ease);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.toast > .icon { flex: none; color: #34c38f; }
+.toast.error { border-color: color-mix(in srgb, var(--kynoko-danger) 55%, transparent); }
+.toast.error > .icon { color: var(--kynoko-danger); }
+.toast.leaving { opacity: 0; transform: translateY(6px); }
+.toast-text { flex: 1; overflow-wrap: anywhere; }
+button.toast-close { display: grid; place-items: center; inline-size: 30px; min-block-size: 30px; padding: 0; border: 0; background: none; color: var(--kynoko-hint); }
+button.toast-close:hover { color: var(--kynoko-text); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
